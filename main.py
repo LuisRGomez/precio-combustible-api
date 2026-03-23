@@ -7,6 +7,7 @@ import json
 import os
 import uvicorn
 from typing import Optional
+from datetime import datetime, date
 
 # --- CONFIG ---
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
@@ -17,6 +18,7 @@ API_CONFIG = config['api']
 DATOS_LOCALES_CONFIG = config['datos_locales']
 RESOURCE_ID = API_CONFIG['resource_id']
 API_URL = API_CONFIG['base_url']
+RESOURCE_SHOW_URL = "http://datos.energia.gob.ar/api/3/action/resource_show"
 
 # --- APP ---
 app = FastAPI(
@@ -48,7 +50,9 @@ def obtener_datos(provincia: str, localidad: Optional[str], limit: int) -> pd.Da
     if API_CONFIG.get('usar_datos_locales'):
         return pd.DataFrame(DATOS_LOCALES_CONFIG['estaciones'])
 
-    filtros = {"provincia": provincia.upper()}
+    filtros = {}
+    if provincia:
+        filtros["provincia"] = provincia.upper()
     if localidad:
         filtros["localidad"] = localidad.upper()
 
@@ -85,15 +89,49 @@ def obtener_datos(provincia: str, localidad: Optional[str], limit: int) -> pd.Da
         df['latitud'] = pd.to_numeric(df['latitud'], errors='coerce')
     if 'longitud' in df.columns:
         df['longitud'] = pd.to_numeric(df['longitud'], errors='coerce')
+    if 'fecha_vigencia' in df.columns:
+        df['fecha_vigencia'] = pd.to_datetime(df['fecha_vigencia'], errors='coerce')
 
     return df
 
 
+def filtrar_por_fecha(df: pd.DataFrame, fecha_desde: Optional[date]) -> pd.DataFrame:
+    if fecha_desde is None or 'fecha_vigencia' not in df.columns:
+        return df
+    cutoff = pd.Timestamp(fecha_desde)
+    return df[df['fecha_vigencia'] >= cutoff]
+
+
+def obtener_last_modified() -> Optional[str]:
+    try:
+        r = requests.get(
+            RESOURCE_SHOW_URL,
+            params={"id": RESOURCE_ID},
+            timeout=10
+        )
+        r.raise_for_status()
+        data = r.json()
+        return data.get('result', {}).get('last_modified')
+    except Exception:
+        return None
+
+
 def df_a_lista(df: pd.DataFrame) -> list:
-    return [
-        {k: (None if pd.isna(v) else v) for k, v in row.items()}
-        for row in df.to_dict(orient='records')
-    ]
+    result = []
+    for row in df.to_dict(orient='records'):
+        clean = {}
+        for k, v in row.items():
+            if isinstance(v, pd.Timestamp):
+                clean[k] = v.isoformat() if not pd.isna(v) else None
+            elif isinstance(v, float) and pd.isna(v):
+                clean[k] = None
+            else:
+                clean[k] = v
+        result.append(clean)
+    return result
+
+
+COLS_BASE = ['empresa', 'direccion', 'localidad', 'provincia', 'producto', 'precio', 'latitud', 'longitud', 'fecha_vigencia']
 
 
 # --- ENDPOINTS ---
@@ -104,7 +142,7 @@ def root():
         "nombre": "API Precios Combustible Argentina",
         "version": "1.0.0",
         "docs": "/docs",
-        "endpoints": ["/precios", "/precios/cercanos", "/precios/baratos", "/health"]
+        "endpoints": ["/info", "/precios", "/precios/cercanos", "/precios/baratos", "/health"]
     }
 
 
@@ -113,17 +151,27 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/info", tags=["Info"])
+def info():
+    """Devuelve metadata del dataset: última actualización y fuente."""
+    last_modified = obtener_last_modified()
+    return {
+        "dataset": "Precios en surtidor - Resolución 314/2016",
+        "fuente": "datos.energia.gob.ar",
+        "resource_id": RESOURCE_ID,
+        "last_modified": last_modified,
+    }
+
+
 @app.get("/precios", tags=["Precios"])
 def precios(
     provincia: str = Query(default="BUENOS AIRES", description="Nombre de la provincia"),
     localidad: Optional[str] = Query(default=None, description="Nombre de la localidad"),
     producto: Optional[str] = Query(default=None, description="Tipo de combustible (ej: Nafta 95, Diesel, GNC)"),
+    fecha_desde: Optional[date] = Query(default=None, description="Filtrar por fecha_vigencia >= esta fecha (YYYY-MM-DD)"),
     limit: int = Query(default=1000, ge=1, le=5000, description="Máximo de registros a traer de la API"),
 ):
-    """
-    Devuelve estaciones de servicio filtradas por provincia, localidad y producto.
-    Ordenadas por precio ascendente.
-    """
+    """Devuelve estaciones filtradas por provincia, localidad, producto y fecha. Ordenadas por precio."""
     df = obtener_datos(provincia, localidad, limit)
 
     if df.empty:
@@ -132,13 +180,13 @@ def precios(
     if producto:
         df = df[df['producto'].str.upper() == producto.upper()]
 
+    df = filtrar_por_fecha(df, fecha_desde)
+
     if 'precio' in df.columns:
         df = df.sort_values('precio')
 
-    cols = [c for c in ['empresa', 'direccion', 'localidad', 'provincia', 'producto', 'precio', 'latitud', 'longitud', 'fecha_vigencia'] if c in df.columns]
-    df = df[cols]
-
-    return {"total": len(df), "estaciones": df_a_lista(df)}
+    cols = [c for c in COLS_BASE if c in df.columns]
+    return {"total": len(df), "estaciones": df_a_lista(df[cols])}
 
 
 @app.get("/precios/cercanos", tags=["Precios"])
@@ -149,11 +197,10 @@ def precios_cercanos(
     provincia: str = Query(default="BUENOS AIRES", description="Provincia para pre-filtrar"),
     localidad: Optional[str] = Query(default=None, description="Localidad para pre-filtrar"),
     producto: Optional[str] = Query(default=None, description="Tipo de combustible"),
+    fecha_desde: Optional[date] = Query(default=None, description="Filtrar por fecha_vigencia >= esta fecha (YYYY-MM-DD)"),
     limit: int = Query(default=1000, ge=1, le=5000),
 ):
-    """
-    Devuelve estaciones dentro del radio GPS indicado, ordenadas por distancia.
-    """
+    """Devuelve estaciones dentro del radio GPS indicado, ordenadas por distancia."""
     df = obtener_datos(provincia, localidad, limit)
 
     if df.empty:
@@ -161,6 +208,8 @@ def precios_cercanos(
 
     if producto:
         df = df[df['producto'].str.upper() == producto.upper()]
+
+    df = filtrar_por_fecha(df, fecha_desde)
 
     df['distancia_km'] = df.apply(
         lambda x: haversine(lat, lon, x.get('latitud'), x.get('longitud')), axis=1
@@ -168,10 +217,8 @@ def precios_cercanos(
     df = df[df['distancia_km'] <= radio_km].sort_values('distancia_km')
     df['distancia_km'] = df['distancia_km'].round(2)
 
-    cols = [c for c in ['empresa', 'direccion', 'localidad', 'provincia', 'producto', 'precio', 'latitud', 'longitud', 'distancia_km', 'fecha_vigencia'] if c in df.columns]
-    df = df[cols]
-
-    return {"total": len(df), "radio_km": radio_km, "estaciones": df_a_lista(df)}
+    cols = [c for c in COLS_BASE + ['distancia_km'] if c in df.columns]
+    return {"total": len(df), "radio_km": radio_km, "estaciones": df_a_lista(df[cols])}
 
 
 @app.get("/precios/baratos", tags=["Precios"])
@@ -179,12 +226,11 @@ def precios_baratos(
     provincia: str = Query(default="BUENOS AIRES"),
     localidad: Optional[str] = Query(default=None),
     producto: Optional[str] = Query(default=None, description="Tipo de combustible (ej: Nafta 95)"),
+    fecha_desde: Optional[date] = Query(default=None, description="Filtrar por fecha_vigencia >= esta fecha (YYYY-MM-DD)"),
     top: int = Query(default=10, ge=1, le=100, description="Cuántos resultados devolver"),
     limit: int = Query(default=1000, ge=1, le=5000),
 ):
-    """
-    Devuelve las N estaciones más baratas para un producto y zona.
-    """
+    """Devuelve las N estaciones más baratas para un producto y zona."""
     df = obtener_datos(provincia, localidad, limit)
 
     if df.empty:
@@ -193,13 +239,13 @@ def precios_baratos(
     if producto:
         df = df[df['producto'].str.upper() == producto.upper()]
 
+    df = filtrar_por_fecha(df, fecha_desde)
+
     if 'precio' in df.columns:
         df = df.dropna(subset=['precio']).sort_values('precio').head(top)
 
-    cols = [c for c in ['empresa', 'direccion', 'localidad', 'provincia', 'producto', 'precio', 'latitud', 'longitud', 'fecha_vigencia'] if c in df.columns]
-    df = df[cols]
-
-    return {"total": len(df), "estaciones": df_a_lista(df)}
+    cols = [c for c in COLS_BASE if c in df.columns]
+    return {"total": len(df), "estaciones": df_a_lista(df[cols])}
 
 
 if __name__ == "__main__":
