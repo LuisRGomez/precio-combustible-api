@@ -135,7 +135,7 @@ def precios(
     if 'precio' in df.columns:
         df = df.sort_values('precio')
 
-    cols = [c for c in ['empresa', 'direccion', 'localidad', 'provincia', 'producto', 'precio', 'fecha_vigencia'] if c in df.columns]
+    cols = [c for c in ['empresa', 'direccion', 'localidad', 'provincia', 'producto', 'precio', 'latitud', 'longitud', 'fecha_vigencia'] if c in df.columns]
     df = df[cols]
 
     return {"total": len(df), "estaciones": df_a_lista(df)}
@@ -168,7 +168,7 @@ def precios_cercanos(
     df = df[df['distancia_km'] <= radio_km].sort_values('distancia_km')
     df['distancia_km'] = df['distancia_km'].round(2)
 
-    cols = [c for c in ['empresa', 'direccion', 'localidad', 'provincia', 'producto', 'precio', 'distancia_km', 'fecha_vigencia'] if c in df.columns]
+    cols = [c for c in ['empresa', 'direccion', 'localidad', 'provincia', 'producto', 'precio', 'latitud', 'longitud', 'distancia_km', 'fecha_vigencia'] if c in df.columns]
     df = df[cols]
 
     return {"total": len(df), "radio_km": radio_km, "estaciones": df_a_lista(df)}
@@ -196,7 +196,7 @@ def precios_baratos(
     if 'precio' in df.columns:
         df = df.dropna(subset=['precio']).sort_values('precio').head(top)
 
-    cols = [c for c in ['empresa', 'direccion', 'localidad', 'provincia', 'producto', 'precio', 'fecha_vigencia'] if c in df.columns]
+    cols = [c for c in ['empresa', 'direccion', 'localidad', 'provincia', 'producto', 'precio', 'latitud', 'longitud', 'fecha_vigencia'] if c in df.columns]
     df = df[cols]
 
     return {"total": len(df), "estaciones": df_a_lista(df)}
