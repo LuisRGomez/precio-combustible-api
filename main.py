@@ -438,29 +438,50 @@ def precios_smart(
     # Si tenemos coordenadas precisas (GPS o IP), buscamos por radio
     usar_radio = location["method"] in ("gps", "ip_cache", "ip_geo", "localidad")
 
-    if usar_radio:
-        df = obtener_datos(resolved_provincia, None, limit)
-        if not df.empty:
-            if producto:
-                df = df[df['producto'].str.upper() == producto.upper()]
-            df = filtrar_por_fecha(df, fecha_desde)
-            df['distancia_km'] = df.apply(
-                lambda x: haversine(resolved_lat, resolved_lon, x.get('latitud'), x.get('longitud')), axis=1
-            )
-            df = df[df['distancia_km'] <= radio_km].sort_values('distancia_km')
-            df['distancia_km'] = df['distancia_km'].round(2)
+    def _aplicar_radio(df_input, lat_u, lon_u, radio):
+        if df_input.empty:
+            return df_input
+        df_input = df_input.copy()
+        df_input['distancia_km'] = df_input.apply(
+            lambda x: haversine(lat_u, lon_u, x.get('latitud'), x.get('longitud')), axis=1
+        )
+        return df_input[df_input['distancia_km'] <= radio].sort_values('distancia_km').assign(
+            distancia_km=lambda d: d['distancia_km'].round(2)
+        )
 
-            # Si no hay resultados en el radio, ampliamos x2
-            if df.empty:
-                df_full = obtener_datos(resolved_provincia, None, limit)
+    if usar_radio:
+        # Paso 1: buscar con localidad detectada (más preciso, evita traer todo BA)
+        df = pd.DataFrame()
+        if resolved_localidad:
+            df_loc = obtener_datos(resolved_provincia, resolved_localidad, limit)
+            if not df_loc.empty:
                 if producto:
-                    df_full = df_full[df_full['producto'].str.upper() == producto.upper()]
-                df_full = filtrar_por_fecha(df_full, fecha_desde)
-                df_full['distancia_km'] = df_full.apply(
-                    lambda x: haversine(resolved_lat, resolved_lon, x.get('latitud'), x.get('longitud')), axis=1
-                )
-                df = df_full[df_full['distancia_km'] <= radio_km * 2].sort_values('distancia_km')
-                df['distancia_km'] = df['distancia_km'].round(2)
+                    df_loc = df_loc[df_loc['producto'].str.upper() == producto.upper()]
+                df_loc = filtrar_por_fecha(df_loc, fecha_desde)
+                df = _aplicar_radio(df_loc, resolved_lat, resolved_lon, radio_km)
+
+        # Paso 2: si hay pocos resultados, ampliar a toda la provincia
+        if len(df) < 5:
+            df_prov = obtener_datos(resolved_provincia, None, limit)
+            if not df_prov.empty:
+                if producto:
+                    df_prov = df_prov[df_prov['producto'].str.upper() == producto.upper()]
+                df_prov = filtrar_por_fecha(df_prov, fecha_desde)
+                df_radio = _aplicar_radio(df_prov, resolved_lat, resolved_lon, radio_km)
+                # Combinar con lo que ya teníamos, sin duplicados
+                if not df_radio.empty:
+                    dedup_cols = [c for c in ['empresa', 'direccion', 'producto'] if c in df_radio.columns]
+                    df = pd.concat([df, df_radio]).drop_duplicates(subset=dedup_cols).sort_values('distancia_km')
+
+        # Paso 3: si sigue sin haber nada, ampliar radio x2
+        if df.empty:
+            df_prov = obtener_datos(resolved_provincia, None, limit)
+            if not df_prov.empty:
+                if producto:
+                    df_prov = df_prov[df_prov['producto'].str.upper() == producto.upper()]
+                df_prov = filtrar_por_fecha(df_prov, fecha_desde)
+                df = _aplicar_radio(df_prov, resolved_lat, resolved_lon, radio_km * 2)
+                location["radio_ampliado"] = True
     else:
         # Fallback por zona administrativa
         df = obtener_datos(resolved_provincia, resolved_localidad, limit)
