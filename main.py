@@ -91,6 +91,12 @@ def _seed_localidades():
 
 @app.on_event("startup")
 async def startup():
+    if os.environ.get("DB_BACKEND") == "dynamo":
+        # DynamoDB: tablas creadas por CloudFormation, scraper Lambda siembra datos.
+        count = db.localidades_count()
+        print(f"[STARTUP] Backend DynamoDB. Localidades en tabla: ~{count}")
+        return
+    # SQLite (Render / local)
     db.init_db()
     if not db.localidades_seeded():
         threading.Thread(target=_seed_localidades, daemon=True).start()
@@ -552,6 +558,73 @@ def precios_smart(
         "ubicacion_resuelta": location,
         "total": len(df),
         "estaciones": df_a_lista(df[cols])
+    }
+
+
+@app.get("/precios/tendencia", tags=["Precios"])
+def precios_tendencia(
+    localidad: str = Query(..., description="Ej: MORON"),
+    provincia: str = Query(..., description="Ej: BUENOS AIRES"),
+    producto:  str = Query(..., description="Ej: Nafta (súper) entre 92 y 95 Ron"),
+    fecha_desde: Optional[date] = Query(default=None, description="YYYY-MM-DD, default: hace 30 días"),
+    fecha_hasta: Optional[date] = Query(default=None, description="YYYY-MM-DD, default: hoy"),
+):
+    """
+    Evolución histórica del precio mínimo diario de un combustible en una localidad.
+
+    Requiere despliegue en AWS (DB_BACKEND=dynamo) — el scraper Lambda acumula
+    datos diariamente desde el primer deploy.
+
+    Para backfill inicial ejecutar el scraper manualmente:
+      aws lambda invoke --function-name combustible-scraper-prod --payload '{}' out.json
+    """
+    if os.environ.get("DB_BACKEND") != "dynamo":
+        raise HTTPException(
+            status_code=501,
+            detail="El endpoint /precios/tendencia solo está disponible en el despliegue AWS (DB_BACKEND=dynamo)."
+        )
+
+    from db_dynamo import get_historico
+
+    hoy       = date.today()
+    desde_str = fecha_desde.isoformat() if fecha_desde else (hoy.replace(month=hoy.month - 1 if hoy.month > 1 else 1)).isoformat()
+    hasta_str = fecha_hasta.isoformat() if fecha_hasta else hoy.isoformat()
+
+    registros = get_historico(
+        localidad=localidad, provincia=provincia, producto=producto,
+        fecha_desde=desde_str, fecha_hasta=hasta_str,
+    )
+
+    if not registros:
+        return {
+            "localidad": localidad.upper().strip(),
+            "provincia": provincia.upper().strip(),
+            "producto":  producto.upper().strip(),
+            "fecha_desde": desde_str, "fecha_hasta": hasta_str,
+            "total_dias": 0, "precio_actual": None,
+            "precio_minimo": None, "precio_maximo": None,
+            "variacion_pct": None, "tendencia": [],
+        }
+
+    precios        = [r["precio"] for r in registros if r["precio"] is not None]
+    precio_actual  = registros[-1]["precio"] if registros else None
+    precio_inicial = registros[0]["precio"]  if registros else None
+    variacion_pct  = None
+    if precio_inicial and precio_actual and precio_inicial != 0:
+        variacion_pct = round(((precio_actual - precio_inicial) / precio_inicial) * 100, 2)
+
+    return {
+        "localidad":     localidad.upper().strip(),
+        "provincia":     provincia.upper().strip(),
+        "producto":      producto.upper().strip(),
+        "fecha_desde":   desde_str,
+        "fecha_hasta":   hasta_str,
+        "total_dias":    len(registros),
+        "precio_actual": precio_actual,
+        "precio_minimo": min(precios) if precios else None,
+        "precio_maximo": max(precios) if precios else None,
+        "variacion_pct": variacion_pct,
+        "tendencia":     registros,
     }
 
 
