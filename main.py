@@ -509,15 +509,24 @@ def precios_smart(
             distancia_km=lambda d: d['distancia_km'].round(2)
         )
 
+    PROVINCIAS_ADYACENTES = {
+        "CABA": ["BUENOS AIRES"],
+        "BUENOS AIRES": ["CABA"],
+    }
+
     if usar_radio:
-        # Paso 1: buscar con localidad del dataset (más preciso, evita traer todo BA)
+        # ── Pasos 1-4: buscar por radio SIN filtrar por fecha ────────────────
+        # La fecha se aplica al FINAL para no vaciar el fallback chain cuando
+        # las estaciones cercanas tienen precios sin actualizar recientemente.
+
         df = pd.DataFrame()
+
+        # Paso 1: localidad del dataset (más preciso, evita traer todo BA)
         if localidad_dataset:
             df_loc = obtener_datos(resolved_provincia, localidad_dataset, limit)
             if not df_loc.empty:
                 if producto:
                     df_loc = df_loc[df_loc['producto'].str.upper() == producto.upper()]
-                df_loc = filtrar_por_fecha(df_loc, fecha_desde)
                 df = _aplicar_radio(df_loc, resolved_lat, resolved_lon, radio_km)
 
         # Paso 2: si hay pocos resultados, ampliar a toda la provincia
@@ -526,26 +535,18 @@ def precios_smart(
             if not df_prov.empty:
                 if producto:
                     df_prov = df_prov[df_prov['producto'].str.upper() == producto.upper()]
-                df_prov = filtrar_por_fecha(df_prov, fecha_desde)
                 df_radio = _aplicar_radio(df_prov, resolved_lat, resolved_lon, radio_km)
-                # Combinar con lo que ya teníamos, sin duplicados
                 if not df_radio.empty:
                     dedup_cols = [c for c in ['empresa', 'direccion', 'producto'] if c in df_radio.columns]
                     df = pd.concat([df, df_radio]).drop_duplicates(subset=dedup_cols).sort_values('distancia_km')
 
-        # Paso 3: si sigue sin haber nada, intentar provincias adyacentes
-        # Muy común: ip-api devuelve "CABA" para IPs de GBA (Buenos Aires provincia)
-        PROVINCIAS_ADYACENTES = {
-            "CABA": ["BUENOS AIRES"],
-            "BUENOS AIRES": ["CABA"],
-        }
+        # Paso 3: provincias adyacentes (ej: IP indica CABA pero el usuario está en GBA)
         if df.empty:
             for prov_adj in PROVINCIAS_ADYACENTES.get(resolved_provincia, []):
                 df_adj = obtener_datos(prov_adj, None, limit)
                 if not df_adj.empty:
                     if producto:
                         df_adj = df_adj[df_adj['producto'].str.upper() == producto.upper()]
-                    df_adj = filtrar_por_fecha(df_adj, fecha_desde)
                     df_adj_radio = _aplicar_radio(df_adj, resolved_lat, resolved_lon, radio_km)
                     if not df_adj_radio.empty:
                         df = df_adj_radio
@@ -553,15 +554,27 @@ def precios_smart(
                         location["nota"] = f"IP indicaba {resolved_provincia}, resultados encontrados en {prov_adj}"
                         break
 
-        # Paso 4: si sigue sin haber nada, ampliar radio x2
+        # Paso 4: ampliar radio x2 como último recurso
         if df.empty:
             df_prov = obtener_datos(resolved_provincia, None, limit)
             if not df_prov.empty:
                 if producto:
                     df_prov = df_prov[df_prov['producto'].str.upper() == producto.upper()]
-                df_prov = filtrar_por_fecha(df_prov, fecha_desde)
                 df = _aplicar_radio(df_prov, resolved_lat, resolved_lon, radio_km * 2)
-                location["radio_ampliado"] = True
+                if not df.empty:
+                    location["radio_ampliado"] = True
+
+        # Aplicar fecha_desde al final — graceful degradation:
+        # si filtrar por fecha vacía el resultado, mostramos igual sin filtro de fecha
+        if fecha_desde and not df.empty:
+            df_fecha = filtrar_por_fecha(df, fecha_desde)
+            if not df_fecha.empty:
+                df = df_fecha
+            else:
+                location["advertencia_fecha"] = (
+                    f"No hay precios actualizados desde {fecha_desde} en el radio. "
+                    "Se muestran los últimos precios disponibles."
+                )
     else:
         # Fallback por zona administrativa
         df = obtener_datos(resolved_provincia, resolved_localidad, limit)

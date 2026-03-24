@@ -220,8 +220,11 @@ def resolve_location(
             if session and session.get("provincia") and session.get("source") in ("gps", "gps_reverse"):
                 cached_prov = cached_prov or session.get("provincia")
                 cached_loc  = cached_loc  or session.get("localidad")
+        # Preservar gps_reverse si la localidad/provincia vino de ese source
+        save_source = "gps_reverse" if (cached_prov and cached_loc and
+            session and session.get("source") == "gps_reverse") else "gps"
         if ip:
-            db_save_session(ip, gps_lat, gps_lon, cached_loc, cached_prov, "gps")
+            db_save_session(ip, gps_lat, gps_lon, cached_loc, cached_prov, save_source)
         return {
             "method": "gps",
             "precision": "exacta",
@@ -229,6 +232,7 @@ def resolve_location(
             "lon": gps_lon,
             "localidad": cached_loc,
             "provincia": cached_prov,
+            "geocoded": cached_prov is not None and cached_loc is not None or None,
         }
 
     # 2. Sesión cacheada por IP (válida 1 hora)
@@ -239,13 +243,16 @@ def resolve_location(
         if session and session.get("lat") and session.get("lon"):
             source = session.get("source", "")
             if source in ("gps", "gps_reverse"):
+                loc  = session.get("localidad")
+                prov = session.get("provincia")
                 return {
                     "method": "ip_cache",
                     "precision": "exacta",
                     "lat": session["lat"],
                     "lon": session["lon"],
-                    "localidad": session.get("localidad"),
-                    "provincia": session.get("provincia"),
+                    "localidad": loc,
+                    "provincia": prov,
+                    "geocoded": (prov is not None and loc is not None) or None,
                 }
             # Sesión IP: solo usamos provincia (no coordenadas imprecisas)
             elif source == "ip" and session.get("provincia"):
