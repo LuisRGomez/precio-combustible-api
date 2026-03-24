@@ -131,7 +131,9 @@ def df_a_lista(df: pd.DataFrame) -> list:
     return result
 
 
-COLS_BASE = ['empresa', 'direccion', 'localidad', 'provincia', 'producto', 'precio', 'latitud', 'longitud', 'fecha_vigencia']
+COLS_BASE = ['empresa', 'razon_social', 'bandera', 'tipo_bandera', 'numero_establecimiento',
+             'calle', 'numero', 'direccion', 'localidad', 'provincia', 'codigo_postal',
+             'latitud', 'longitud', 'producto', 'precio', 'fecha_vigencia']
 
 
 # --- ENDPOINTS ---
