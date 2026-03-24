@@ -41,7 +41,13 @@ PROVINCIA_MAP = {
 
 
 def normalize_provincia(name: str) -> str:
-    key = name.upper().strip()
+    # Limpiar prefijos comunes que devuelve Nominatim
+    cleaned = name.strip()
+    for prefix in ("Provincia de ", "Province of ", "Departamento de ", "Partido de "):
+        if cleaned.startswith(prefix):
+            cleaned = cleaned[len(prefix):]
+            break
+    key = cleaned.upper().strip()
     return PROVINCIA_MAP.get(key, key)
 
 
@@ -104,6 +110,7 @@ def reverse_geocode(lat: float, lon: float) -> Optional[dict]:
         )
         provincia = normalize_provincia(raw_prov)
         if provincia:
+            print(f"[GEO] Reverse geocode OK: {localidad} / {provincia} (raw state='{raw_prov}')")
             return {
                 "lat": lat,
                 "lon": lon,
@@ -111,8 +118,10 @@ def reverse_geocode(lat: float, lon: float) -> Optional[dict]:
                 "provincia": provincia,
                 "source": "gps_reverse",
             }
-    except Exception:
-        pass
+        else:
+            print(f"[GEO] Reverse geocode: no provincia. address={address}")
+    except Exception as e:
+        print(f"[GEO] Reverse geocode error: {e}")
     return None
 
 
