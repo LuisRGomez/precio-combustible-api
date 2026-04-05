@@ -311,8 +311,8 @@ function SegurosCTA({ from, to }: { from: string; to: string }) {
 
 export function RoadTripPage() {
   useSEO({
-    title:       'Planificá tu viaje — paradas, nafta barata y clima',
-    description: 'Calculá cuánta nafta necesitás para tu viaje en auto por Argentina. Encontrá las estaciones más baratas en ruta, hoteles y alertas de clima.',
+    title:       'Calculadora de viaje en auto — nafta, paradas y clima en ruta | Tankear',
+    description: 'Calculá el costo en nafta de tu viaje en auto por Argentina. Encontrá las estaciones más baratas en ruta, hoteles, clima y planificá tus paradas.',
     canonical:   'https://tankear.com.ar/viaje',
   });
   const { user, logout }               = useUser();

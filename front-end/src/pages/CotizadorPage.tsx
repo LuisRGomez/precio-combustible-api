@@ -253,8 +253,8 @@ function HeroSection() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export function CotizadorPage() {
   useSEO({
-    title:       'Calculadora de gasto en nafta — ahorrá en tu auto',
-    description: 'Calculá cuánto gastás en nafta por mes. Cotizá tu seguro de auto y compará aseguradoras en Argentina. Herramienta gratuita en Tankear.',
+    title:       'Cotizador de seguro de auto — compará aseguradoras en Argentina',
+    description: 'Cotizá tu seguro de auto gratis. Comparamos Zurich, Allianz, La Caja, Mapfre y más aseguradoras de Argentina. Resultado en segundos, sin llamadas.',
     canonical:   'https://tankear.com.ar/cotizador',
   });
   const { user, logout } = useUser();
