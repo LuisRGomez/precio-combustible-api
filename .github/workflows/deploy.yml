@@ -59,6 +59,17 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
 
+      - name: Inject developer SSH key
+        run: |
+          # Agrega la clave pública del dev a authorized_keys (idempotente)
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            "mkdir -p ~/.ssh && chmod 700 ~/.ssh && \
+             grep -qxF '${{ secrets.DEV_SSH_PUBKEY }}' ~/.ssh/authorized_keys 2>/dev/null || \
+             echo '${{ secrets.DEV_SSH_PUBKEY }}' >> ~/.ssh/authorized_keys && \
+             chmod 600 ~/.ssh/authorized_keys && \
+             echo '✅ Dev SSH key verificada'"
+
       - name: Deploy frontend
         run: |
           rsync -az --delete \
