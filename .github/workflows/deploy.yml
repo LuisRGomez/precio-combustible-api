@@ -25,7 +25,7 @@ jobs:
       - name: Build
         working-directory: front-end
         env:
-          VITE_API_BASE: ''
+          VITE_API_BASE: 'https://tankear.com.ar/api'
         run: npm run build
 
       - name: Upload dist artifact
