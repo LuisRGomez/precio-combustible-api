@@ -41,6 +41,25 @@ def init_db():
             key   TEXT PRIMARY KEY,
             value TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS estaciones (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa             TEXT,
+            marca               TEXT,
+            producto            TEXT,
+            precio              REAL,
+            provincia           TEXT,
+            localidad           TEXT,
+            direccion           TEXT,
+            latitud             REAL,
+            longitud            REAL,
+            fecha_vigencia      TEXT,
+            fecha_actualizacion TEXT,
+            fecha_scraping      TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_est_prov ON estaciones(provincia);
+        CREATE INDEX IF NOT EXISTS idx_est_loc  ON estaciones(localidad);
+        CREATE INDEX IF NOT EXISTS idx_est_prod ON estaciones(producto);
     """)
     conn.commit()
     conn.close()
@@ -137,6 +156,72 @@ def localidades_count() -> int:
     row = conn.execute("SELECT COUNT(*) FROM localidades").fetchone()
     conn.close()
     return row[0] if row else 0
+
+
+# ─── Estaciones (cache de precios de combustible) ────────────────────────────
+
+def estaciones_count() -> int:
+    """Devuelve la cantidad de estaciones cacheadas en SQLite."""
+    conn = _conn()
+    row = conn.execute("SELECT COUNT(*) FROM estaciones").fetchone()
+    conn.close()
+    return row[0] if row else 0
+
+
+def estaciones_age_hours() -> Optional[float]:
+    """Horas desde la última vez que se actualizó el cache de estaciones."""
+    conn = _conn()
+    row = conn.execute(
+        "SELECT MAX(fecha_scraping) FROM estaciones"
+    ).fetchone()
+    conn.close()
+    if not row or not row[0]:
+        return None
+    try:
+        last = datetime.fromisoformat(row[0])
+        return (datetime.utcnow() - last).total_seconds() / 3600
+    except Exception:
+        return None
+
+
+def get_estaciones(provincia=None, localidad=None, producto=None, limit=500) -> list:
+    """Lee estaciones del cache SQLite con filtros opcionales."""
+    conn = _conn()
+    q = "SELECT * FROM estaciones WHERE 1=1"
+    params = []
+    if provincia:
+        q += " AND UPPER(provincia) = ?"
+        params.append(provincia.upper().strip())
+    if localidad:
+        q += " AND UPPER(localidad) = ?"
+        params.append(localidad.upper().strip())
+    if producto:
+        q += " AND UPPER(producto) LIKE ?"
+        params.append(f"%{producto.upper().strip()}%")
+    q += " ORDER BY fecha_vigencia DESC"
+    if limit:
+        q += f" LIMIT {int(limit)}"
+    rows = conn.execute(q, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def save_estaciones(records: list):
+    """Guarda (reemplaza) el cache completo de estaciones."""
+    if not records:
+        return
+    conn = _conn()
+    conn.execute("DELETE FROM estaciones")
+    conn.executemany("""
+        INSERT INTO estaciones
+            (empresa, marca, producto, precio, provincia, localidad,
+             direccion, latitud, longitud, fecha_vigencia, fecha_actualizacion)
+        VALUES
+            (:empresa, :marca, :producto, :precio, :provincia, :localidad,
+             :direccion, :latitud, :longitud, :fecha_vigencia, :fecha_actualizacion)
+    """, records)
+    conn.commit()
+    conn.close()
 
 
 def _haversine_simple(lat1, lon1, lat2, lon2) -> float:
