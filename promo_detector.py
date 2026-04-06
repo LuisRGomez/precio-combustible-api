@@ -97,6 +97,37 @@ def _decode_header_str(h: str) -> str:
     return " ".join(out)
 
 
+def _extraer_remitente_original(msg: email.message.Message, texto: str) -> str:
+    """
+    Cuando el mail es un reenvío (Fwd:/RV:), extrae el remitente original
+    del cuerpo — porque el From: del sobre muestra al forwarder, no al origen.
+    Soporta reenvíos de Gmail, Outlook/Hotmail y Apple Mail.
+    """
+    from_header = _decode_header_str(msg.get("From", ""))
+
+    # Si el From: no es una cuenta personal de reenvío, usarlo directo
+    FORWARDERS = ["gmail.com", "hotmail.com", "outlook.com", "yahoo.com",
+                  "live.com", "icloud.com", "me.com"]
+    if not any(f in from_header.lower() for f in FORWARDERS):
+        return from_header
+
+    # Buscar en el cuerpo el remitente original
+    # Patrones de Outlook: "De: X <email>" / Gmail: "From: X <email>"
+    patrones = [
+        r'(?:De|From)\s*:\s*(.+?<[^>]+>)',      # "De: Nombre <email>"
+        r'(?:De|From)\s*:\s*([^\s]+@[^\s\n]+)',  # "De: email@domain.com"
+    ]
+    for pat in patrones:
+        m = re.search(pat, texto[:3000], re.IGNORECASE)
+        if m:
+            candidato = m.group(1).strip()
+            # Asegurarse de que no sea el mismo forwarder
+            if not any(f in candidato.lower() for f in FORWARDERS):
+                return candidato
+
+    return from_header
+
+
 def _get_text(msg: email.message.Message) -> str:
     """Extrae el texto plano o HTML del mensaje."""
     text = ""
@@ -131,6 +162,15 @@ def _es_promo_combustible(asunto: str, texto: str, remitente: str = "") -> bool:
     """
     contenido = (asunto + " " + texto[:2000]).lower()
     rem = remitente.lower()
+
+    # Bancos/wallets/clubes → siempre filtro estricto (mandan promos de todo)
+    SOLO_FILTRO_ESTRICTO = [
+        "galicia", "bbva", "macro", "santander", "hsbc", "icbc",
+        "bancociudad", "bancoprovincia", "bna.com", "banconacion",
+        "clubln", "lanacionline", "modo.com", "mercadopago", "uala",
+    ]
+    if any(d in rem for d in SOLO_FILTRO_ESTRICTO):
+        rem = ""  # forzar path de filtro estricto
 
     # ¿Viene de una estación/marca conocida?
     es_estacion = any(d in rem for d in REMITENTES_CONFIABLES) or \
@@ -242,16 +282,36 @@ def _extraer_info(asunto: str, texto: str, remitente: str) -> dict:
     # Tarjeta / wallet — priorizar remitente sobre cuerpo del mail
     rem_lower = remitente.lower()
     REMITENTE_A_TARJETA = {
-        "naranjax.com":      "Naranja X",
-        "naranja.com.ar":    "Naranja",
-        "modo.com.ar":       "Modo",
-        "mercadopago.com":   "Mercado Pago",
-        "uala.com.ar":       "Ualá",
-        "bbva.com.ar":       "BBVA",
-        "galicia.com.ar":    "Galicia",
-        "santander.com.ar":  "Santander",
-        "macro.com.ar":      "Macro",
-        "hsbc.com.ar":       "HSBC",
+        # Wallets
+        "naranjax.com":           "Naranja X",
+        "naranja.com.ar":         "Naranja",
+        "modo.com.ar":            "Modo",
+        "mercadopago.com":        "Mercado Pago",
+        "uala.com.ar":            "Ualá",
+        # Bancos
+        "mail.galicia.ar":        "Galicia",
+        "galicia.com.ar":         "Galicia",
+        "bbva.com":               "BBVA",
+        "bbva.com.ar":            "BBVA",
+        "macro.com.ar":           "Macro",
+        "santander.com.ar":       "Santander",
+        "hsbc.com.ar":            "HSBC",
+        "icbcmall.com.ar":        "ICBC",
+        "icbc.com.ar":            "ICBC",
+        "bancociudad.com.ar":     "Ciudad",
+        "bancoprovincia.com.ar":  "Provincia",
+        "bna.com.ar":             "Banco Nación",
+        "banconacion.com.ar":     "Banco Nación",
+        # Clubes / beneficios
+        "clubln.com.ar":          "Club La Nación",
+        "lanacionline.com.ar":    "La Nación",
+        # Estaciones
+        "onaxionenergy.com":      "Axion",
+        "axionenergy.com":        "Axion",
+        "ypf.com":                "YPF",
+        "shell.com.ar":           "Shell",
+        "pumafuel.com":           "Puma",
+        "gulf.com.ar":            "Gulf",
     }
     tarjeta = None
     for dominio, nombre in REMITENTE_A_TARJETA.items():
@@ -521,12 +581,14 @@ async def main():
             status, data = imap.fetch(mid, "(RFC822)")
             msg = email.message_from_bytes(data[0][1])
 
-            mail_id  = msg.get("Message-ID", mid.decode())
-            asunto   = _decode_header_str(msg.get("Subject", ""))
-            remitente = _decode_header_str(msg.get("From", ""))
-            texto    = _get_text(msg)
+            mail_id   = msg.get("Message-ID", mid.decode())
+            asunto    = _decode_header_str(msg.get("Subject", ""))
+            texto     = _get_text(msg)
+            # Usar remitente original si es reenvío de cuenta personal
+            remitente = _extraer_remitente_original(msg, texto)
 
             log.info(f"Procesando: {asunto[:60]}")
+            log.info(f"  Remitente: {remitente[:60]}")
 
             if _ya_procesado(mail_id):
                 log.info("  → Ya procesado, skip")
