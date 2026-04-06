@@ -165,7 +165,7 @@ def _es_promo_combustible(asunto: str, texto: str, remitente: str = "") -> bool:
 
     # Bancos/wallets/clubes → siempre filtro estricto (mandan promos de todo)
     SOLO_FILTRO_ESTRICTO = [
-        "galicia", "bbva", "macro", "santander", "hsbc", "icbc",
+        "galicia", "bbva", "macro", "santander", "novedades.santander", "hsbc", "icbc",
         "bancociudad", "bancoprovincia", "bna.com", "banconacion",
         "clubln", "lanacionline", "modo.com", "mercadopago", "uala",
     ]
@@ -294,7 +294,8 @@ def _extraer_info(asunto: str, texto: str, remitente: str) -> dict:
         "bbva.com":               "BBVA",
         "bbva.com.ar":            "BBVA",
         "macro.com.ar":           "Macro",
-        "santander.com.ar":       "Santander",
+        "santander.com.ar":              "Santander",
+        "novedades.santander.com.ar":    "Santander",
         "hsbc.com.ar":            "HSBC",
         "icbcmall.com.ar":        "ICBC",
         "icbc.com.ar":            "ICBC",
