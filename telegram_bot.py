@@ -330,21 +330,48 @@ async def cmd_precios(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 async def cmd_cotizar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message or update.callback_query.message
-    texto = """
-🛡️ *Cotizador de seguro de auto*
-
-Comparamos más de 20 aseguradoras en segundos:
-✅ Zurich · Allianz · La Caja · Mapfre y más
-✅ Terceros / Terceros completo / Todo riesgo
-✅ Sin llamadas · Resultado inmediato
-✅ El dólar sube — fijá el precio hoy
-
-👇 *Tocá para ver tus cotizaciones:*
-"""
+    texto = (
+        "🛡️ *Cotizador de seguro de auto*\n\n"
+        "Comparamos más de 20 aseguradoras en segundos\\.\n\n"
+        "¿En qué *año* fabricaron tu auto? \\(ej: `2019`\\)\n\n"
+        "_También podés ir directo al cotizador:_"
+    )
     await msg.reply_text(
-        texto.strip(),
+        texto,
         parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=kb_cotizar(),
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton(
+                "🛡️ Cotizar en tankear.com.ar →",
+                url="https://tankear.com.ar/cotizador?utm_source=tgbot"
+            )],
+            [InlineKeyboardButton("← Menú principal", callback_data="menu")],
+        ]),
+    )
+    context.user_data["cotizar_step"] = "anio"
+
+
+async def cotizar_recibir_anio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if context.user_data.get("cotizar_step") != "anio":
+        return
+    texto = update.message.text.strip()
+    if not texto.isdigit() or not (1990 <= int(texto) <= 2026):
+        await update.message.reply_text(
+            "Escribí solo el año\\. Ej: `2019`",
+            parse_mode=ParseMode.MARKDOWN_V2
+        )
+        return
+    anio = texto
+    context.user_data["cotizar_anio"] = anio
+    context.user_data["cotizar_step"] = None
+
+    url = f"https://tankear.com.ar/cotizador?anio={anio}&utm_source=tgbot"
+    await update.message.reply_text(
+        f"✅ Auto *{escape_md(anio)}* — cotizá ahora:",
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton(f"🛡️ Ver cotizaciones para {anio} →", url=url)],
+            [InlineKeyboardButton("← Menú principal", callback_data="menu")],
+        ]),
     )
 
 # ── Conversación: suscribir ────────────────────────────────────────────────────
@@ -523,13 +550,17 @@ async def cmd_barata(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     await update.message.reply_text("🔍 Buscando la estación más barata\\.\\.\\.".replace("...", "\\.\\.\\."),
                                      parse_mode=ParseMode.MARKDOWN_V2)
     try:
-        params = {"limit": 200}
+        from datetime import timedelta
+        fecha_desde = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        params = {"limit": 500, "fecha_desde": fecha_desde}
         if zona:
             params["provincia"] = zona.upper()
         async with httpx.AsyncClient(timeout=15) as client:
             r = await client.get(f"{API_BASE}/precios", params=params)
             data = r.json()
         estaciones = data.get("estaciones", []) if isinstance(data, dict) else data
+        # Filtrar precios claramente desactualizados (< $500/L son históricos)
+        estaciones = [e for e in estaciones if e.get("precio") and float(e.get("precio", 0)) >= 500]
         if not estaciones:
             await update.message.reply_text("No encontré estaciones\\. Probá con `/barata Buenos Aires`",
                                              parse_mode=ParseMode.MARKDOWN_V2)
@@ -593,56 +624,90 @@ async def cmd_viaje(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
     try:
-        # Geocodificar ambos puntos con Nominatim
-        async with httpx.AsyncClient(timeout=10, headers={"User-Agent": "Tankear/3.0"}) as client:
-            def _geo(q):
-                return client.get("https://nominatim.openstreetmap.org/search",
-                    params={"q": f"{q}, Argentina", "format": "json", "limit": 1})
-
-            r_or, r_dst = await asyncio.gather(_geo(origen), _geo(destino))
+        # 1. Geocodificar con Nominatim (secuencial para respetar rate limit)
+        async with httpx.AsyncClient(timeout=12, headers={"User-Agent": "Tankear/3.0"}) as client:
+            r_or = await client.get("https://nominatim.openstreetmap.org/search",
+                params={"q": f"{origen}, Argentina", "format": "json", "limit": 1,
+                        "countrycodes": "ar"})
+            await asyncio.sleep(1.1)  # rate limit Nominatim: 1 req/s
+            r_dst = await client.get("https://nominatim.openstreetmap.org/search",
+                params={"q": f"{destino}, Argentina", "format": "json", "limit": 1,
+                        "countrycodes": "ar"})
             geo_or  = r_or.json()
             geo_dst = r_dst.json()
 
         if not geo_or or not geo_dst:
             await update.message.reply_text(
-                "No pude ubicar origen o destino\\. Probá con nombres más específicos\\.",
+                "No pude ubicar origen o destino\\. "
+                "Probá con nombres más específicos \\(ej: `/viaje BuenosAires Cordoba`\\)\\.",
                 parse_mode=ParseMode.MARKDOWN_V2)
             return
 
         lat1, lon1 = float(geo_or[0]["lat"]),  float(geo_or[0]["lon"])
         lat2, lon2 = float(geo_dst[0]["lat"]), float(geo_dst[0]["lon"])
 
-        # Distancia haversine × factor ruta 1.35
-        import math
-        R = 6371
-        dlat = math.radians(lat2 - lat1)
-        dlon = math.radians(lon2 - lon1)
-        a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
-        dist_linea = R * 2 * math.asin(math.sqrt(a))
-        dist_ruta  = round(dist_linea * 1.35)
+        # 2. Distancia por ruta via OSRM (el mismo motor que usa la web)
+        dist_ruta = None
+        dur_min   = None
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                osrm = await client.get(
+                    f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}",
+                    params={"overview": "false"})
+                osrm_data = osrm.json()
+            if osrm_data.get("code") == "Ok":
+                route    = osrm_data["routes"][0]
+                dist_ruta = round(route["distance"] / 1000)   # metros → km
+                dur_min   = round(route["duration"] / 60)      # seg → min
+        except Exception as oe:
+            logger.debug(f"OSRM error: {oe}")
 
-        # Obtener precio súper en zona de origen
-        prov_origen = geo_or[0].get("display_name", "").split(",")[-2].strip()
-        stats = await get_estadisticas(provincia=prov_origen)
+        # Fallback haversine si OSRM falla
+        if not dist_ruta:
+            import math
+            R = 6371
+            dlat = math.radians(lat2 - lat1)
+            dlon = math.radians(lon2 - lon1)
+            a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
+            dist_ruta = round(R * 2 * math.asin(math.sqrt(a)) * 1.25)
+
+        # 3. Precio súper en provincia de origen
+        prov_origen = ""
+        display = geo_or[0].get("display_name", "")
+        for part in display.split(","):
+            part = part.strip()
+            if any(p in part.upper() for p in ["AIRES", "CÓRDOBA", "CORDOBA", "SANTA FE",
+                                                 "MENDOZA", "TUCUMÁN", "SALTA", "JUJUY",
+                                                 "ENTRE RÍOS", "CORRIENTES", "MISIONES"]):
+                prov_origen = part
+                break
+
+        stats = await get_estadisticas(provincia=prov_origen or "BUENOS AIRES")
         precio_super = None
         if stats:
             for p in stats.get("por_producto", []):
-                if "92" in p.get("producto", "") or "súper" in p.get("producto", "").lower():
-                    precio_super = p.get("promedio")
+                prod_name = p.get("producto", "")
+                if "92" in prod_name or "súper" in prod_name.lower() or "super" in prod_name.lower():
+                    precio_super = p.get("precio_promedio")
                     break
 
-        CONSUMO = 10.0  # L/100km promedio
+        CONSUMO = 10.0
         litros  = round(dist_ruta * CONSUMO / 100, 1)
         costo   = round(litros * precio_super) if precio_super else None
 
+        dur_txt = ""
+        if dur_min:
+            hh, mm = divmod(dur_min, 60)
+            dur_txt = f" · `{hh}h {mm:02d}min`" if hh else f" · `{mm}min`"
+
         lineas = [
-            f"🗺️ *{escape_md(origen)}* → *{escape_md(destino)}*\n",
-            f"📏 Distancia estimada: `{dist_ruta} km`",
+            f"🗺️ *{escape_md(origen.title())}* → *{escape_md(destino.title())}*\n",
+            f"📏 Distancia por ruta: `{dist_ruta} km`{dur_txt}",
             f"⛽ Consumo \\(10L/100km\\): `{litros} L`",
         ]
         if costo and precio_super:
-            lineas.append(f"💰 Costo aprox\\. nafta súper: `{fmt_precio(costo)}`")
-            lineas.append(f"   \\(a {fmt_precio(precio_super)}/L en {escape_md(prov_origen)}\\)")
+            lineas.append(f"💰 Costo nafta súper: `{fmt_precio(costo)}`")
+            lineas.append(f"   _\\({fmt_precio(precio_super)}/L en {escape_md(prov_origen or 'Buenos Aires')}\\)_")
         lineas.append(f"\n[Calculadora completa en Tankear](https://tankear\\.com\\.ar/viaje)")
 
         await update.message.reply_text("\n".join(lineas),
@@ -807,17 +872,27 @@ async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     hoy = date.today().strftime("%d/%m/%Y")
     lineas = [f"📊 *Resumen de precios — {escape_md(provincia)}*\n_{escape_md(hoy)}_\n"]
 
+    LABELS = {
+        "Nafta (súper) entre 92 y 95 Ron":  "⛽ Súper 92",
+        "Nafta (premium) de más de 95 Ron": "🔵 Premium 95+",
+        "Gas Oil Grado 2":                  "🟤 Gasoil G2",
+        "Gas Oil Grado 3":                  "🟤 Gasoil G3",
+        "GNC":                              "🟢 GNC",
+    }
     for p in stats["por_producto"]:
         prod  = p.get("producto", "")
-        prom  = p.get("promedio")
-        mini  = p.get("minimo")
-        maxi  = p.get("maximo")
+        prom  = p.get("precio_promedio")   # clave correcta de la API
+        mini  = p.get("precio_min")
+        maxi  = p.get("precio_max")
+        n     = p.get("count_estaciones", "")
         if not prom:
             continue
+        label = LABELS.get(prod, escape_md(prod[:24]))
         lineas.append(
-            f"*{escape_md(prod)}*\n"
+            f"*{label}*\n"
             f"  Promedio: `{fmt_precio(prom)}/L`\n"
             f"  Rango: `{fmt_precio(mini)}` — `{fmt_precio(maxi)}/L`"
+            + (f" \\({n} est\\.\\)" if n else "")
         )
 
     ultima = stats.get("ultima_actualizacion", "")
@@ -938,6 +1013,11 @@ def _log_mensaje(update: Update, intencion: str, score: int):
 
 
 async def handle_texto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Si estamos esperando el año para cotizar
+    if context.user_data.get("cotizar_step") == "anio":
+        await cotizar_recibir_anio(update, context)
+        return
+
     intencion, score = _detectar_intencion(update.message.text or "")
     _log_mensaje(update, intencion, score)
 
