@@ -36,22 +36,47 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("promo_detector")
 
 # ── Palabras clave para detectar promos de combustible ───────────────────────
-KW_COMBUSTIBLE = [
+
+# Al menos UNA de estas debe aparecer (son específicas de combustible)
+KW_COMBUSTIBLE_ESTRICTO = [
     "combustible", "nafta", "gasoil", "gas oil", "gnc", "surtidor",
-    "estación de servicio", "estacion de servicio", "litro", "litros",
-    "ypf", "shell", "axion", "axión", "puma", "gulf", "petrobras",
-    "tankear",
+    "estación de servicio", "estacion de servicio", "carga de nafta",
+    "litro de nafta", "litros de nafta", "litro de gasoil",
+    "ypf servi", "shell servi", "axion energy", "axión energy",
+    "puma energy", "gulf station",
 ]
+
+# Marcas de estaciones de servicio (remitente o cuerpo)
+KW_MARCAS_ESTACION = [
+    "ypf", "shell", "axion", "axión", "puma energy", "gulf",
+    "petrobras", "tankear",
+]
+
+# Dominios de remitentes confiables de energía/combustible
+REMITENTES_CONFIABLES = [
+    "ypf.com", "shell.com.ar", "axionenergy.com", "pumafuel.com",
+    "gulf.com.ar", "tankear.com.ar",
+]
+
 KW_PROMO = [
     "descuento", "reintegro", "cashback", "beneficio", "promo", "promoción",
-    "promocion", "oferta", "ahorrá", "ahorra", "gratis", "%", "cuotas",
-    "2x1", "bonificación", "bonificacion", "acumulá", "acumula", "puntos",
+    "promocion", "oferta", "ahorrá", "ahorra", "%", "cuotas sin interés",
+    "2x1", "bonificación", "bonificacion", "acumulá puntos", "acumula puntos",
 ]
 KW_TARJETA = [
     "visa", "mastercard", "maestro", "american express", "amex",
     "naranja", "cabal", "bbva", "galicia", "santander", "hsbc",
     "macro", "supervielle", "nación", "nacion", "provincia", "ciudad",
     "itaú", "itau", "patagonia", "icbc", "uala", "mercado pago",
+]
+
+# Palabras que indican que NO es una promo de combustible
+KW_DESCARTE = [
+    "hamburguesa", "burger", "pizza", "sushi", "restaurant", "comida",
+    "delivery", "pedidos ya", "rappi", "glovo", "uber eats",
+    "ropa", "moda", "indumentaria", "calzado", "zapatillas",
+    "vuelos", "hotel", "turismo", "viaje en avión",
+    "supermercado", "hipermercado", "carrefour", "coto", "dia ",
 ]
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -86,12 +111,52 @@ def _get_text(msg: email.message.Message) -> str:
     return text
 
 
-def _es_promo_combustible(asunto: str, texto: str) -> bool:
-    """Retorna True si el mail parece una promo de combustible."""
+def _es_promo_combustible(asunto: str, texto: str, remitente: str = "") -> bool:
+    """
+    Regla principal de detección:
+
+    - Si el remitente es una estación de servicio conocida (YPF, Shell, Axion...):
+      publicamos TODO lo que tenga alguna palabra de promo. No importa si es
+      nafta, lavadero, tienda o café — el usuario tiene el club y le sirve.
+
+    - Si el remitente es desconocido (mail reenviado manualmente, banco, etc.):
+      exigimos una palabra estricta de combustible + promo, y descartamos
+      categorías claramente ajenas.
+    """
     contenido = (asunto + " " + texto[:2000]).lower()
-    tiene_combustible = any(kw in contenido for kw in KW_COMBUSTIBLE)
+    rem = remitente.lower()
+
+    # ¿Viene de una estación/marca conocida?
+    es_estacion = any(d in rem for d in REMITENTES_CONFIABLES) or \
+                  any(kw in rem for kw in KW_MARCAS_ESTACION)
+
     tiene_promo = any(kw in contenido for kw in KW_PROMO)
-    return tiene_combustible and tiene_promo
+
+    if es_estacion:
+        # De YPF/Shell/Axion: publicamos si tiene cualquier promo
+        if not tiene_promo:
+            log.info("  → Remitente estación pero sin palabras de promo, skip")
+            return False
+        log.info(f"  → Remitente estación ({rem[:40]}): publicando")
+        return True
+
+    # Remitente desconocido: filtro más estricto
+    if any(kw in contenido for kw in KW_DESCARTE):
+        log.info("  → Descartado: categoría ajena (comida/ropa/etc)")
+        return False
+
+    tiene_combustible = any(kw in contenido for kw in KW_COMBUSTIBLE_ESTRICTO) or \
+                        any(kw in asunto.lower() for kw in KW_MARCAS_ESTACION)
+
+    if not tiene_combustible:
+        log.info("  → Sin señal de combustible")
+        return False
+
+    if not tiene_promo:
+        log.info("  → Sin palabras de promo")
+        return False
+
+    return True
 
 
 def _extraer_info(asunto: str, texto: str, remitente: str) -> dict:
@@ -182,11 +247,24 @@ def _init_promo_table():
         CREATE TABLE IF NOT EXISTS telegram_promos (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             mail_id     TEXT UNIQUE,
+            remitente   TEXT,
             asunto      TEXT,
+            descuento   TEXT,
+            marca       TEXT,
+            tarjeta     TEXT,
+            vigencia    TEXT,
             publicado   INTEGER DEFAULT 0,
+            texto_msg   TEXT,
             created_at  TEXT DEFAULT (datetime('now'))
         )
     """)
+    # Migración: agregar columnas si ya existía la tabla sin ellas
+    for col in ["remitente TEXT", "descuento TEXT", "marca TEXT",
+                "tarjeta TEXT", "vigencia TEXT", "texto_msg TEXT"]:
+        try:
+            con.execute(f"ALTER TABLE telegram_promos ADD COLUMN {col}")
+        except Exception:
+            pass
     con.commit()
     con.close()
 
@@ -201,12 +279,25 @@ def _ya_procesado(mail_id: str) -> bool:
         return False
 
 
-def _marcar_procesado(mail_id: str, asunto: str, publicado: bool):
+def _marcar_procesado(mail_id: str, asunto: str, publicado: bool,
+                      info: dict = None, texto_msg: str = ""):
     try:
         con = sqlite3.connect(DB_PATH)
         con.execute(
-            "INSERT OR IGNORE INTO telegram_promos (mail_id, asunto, publicado) VALUES (?,?,?)",
-            (mail_id, asunto, int(publicado))
+            """INSERT OR IGNORE INTO telegram_promos
+               (mail_id, remitente, asunto, descuento, marca, tarjeta, vigencia, publicado, texto_msg)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (
+                mail_id,
+                info.get("remitente", "") if info else "",
+                asunto,
+                info.get("descuento", "") if info else "",
+                info.get("marca", "") if info else "",
+                info.get("tarjeta", "") if info else "",
+                info.get("vigencia", "") if info else "",
+                int(publicado),
+                texto_msg,
+            )
         )
         con.commit()
         con.close()
@@ -275,19 +366,20 @@ async def main():
                 log.info("  → Ya procesado, skip")
                 continue
 
-            if not _es_promo_combustible(asunto, texto):
+            info = _extraer_info(asunto, texto, remitente)
+
+            if not _es_promo_combustible(asunto, texto, remitente):
                 log.info("  → No es promo de combustible, skip")
-                _marcar_procesado(mail_id, asunto, False)
-                # Marcar como leído igual para no reprocesar
+                # Guardamos igual con publicado=0 para tener historial
+                _marcar_procesado(mail_id, asunto, False, info)
                 imap.store(mid, "+FLAGS", "\\Seen")
                 continue
 
-            log.info("  → ¡Es promo de combustible! Publicando...")
-            info = _extraer_info(asunto, texto, remitente)
+            log.info("  → ¡Es promo! Publicando...")
             mensaje = _formatear_mensaje(info, asunto)
 
             ok = await _send_telegram(mensaje)
-            _marcar_procesado(mail_id, asunto, ok)
+            _marcar_procesado(mail_id, asunto, ok, info, mensaje)
             imap.store(mid, "+FLAGS", "\\Seen")
 
             if ok:
