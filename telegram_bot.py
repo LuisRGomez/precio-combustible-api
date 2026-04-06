@@ -259,67 +259,72 @@ _Datos: Bluelytics · actualizado cada 15 min_
 
 async def cmd_precios(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message or update.callback_query.message
+    chat_id = update.effective_user.id if update.effective_user else 0
 
-    # Intentar con datos nacionales si no hay localidad guardada
-    zona = context.user_data.get("zona", "")
-    provincia = context.user_data.get("provincia", "")
+    # 1. Args del comando: /precios Córdoba
+    args = context.args or []
+    provincia = " ".join(args).strip().upper() if args else ""
+
+    # 2. Perfil guardado en DB
+    if not provincia and _DB_OK:
+        try:
+            subs = [s for s in db.get_telegram_subscribers() if s["chat_id"] == chat_id]
+            if subs and subs[0].get("provincia"):
+                provincia = subs[0]["provincia"].upper()
+        except Exception:
+            pass
+
+    # 3. Default: Buenos Aires
+    if not provincia:
+        provincia = "BUENOS AIRES"
 
     await msg.reply_text("🔍 _Buscando precios\\.\\.\\._", parse_mode=ParseMode.MARKDOWN_V2)
 
     stats = await get_estadisticas(provincia=provincia)
 
-    if not stats:
+    if not stats or not stats.get("por_producto"):
         await msg.reply_text(
-            "⚠️ No pude obtener precios en este momento\\. Probá en [tankear\\.com\\.ar](https://tankear.com.ar)",
+            "⚠️ No pude obtener precios en este momento\\. "
+            "Probá en [tankear\\.com\\.ar](https://tankear.com.ar)",
             parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=kb_volver(),
-            disable_web_page_preview=False,
         )
         return
 
-    # Construir mensaje con los stats disponibles
-    lineas = ["⛽ *Precios de nafta* — Argentina\n"]
-
-    productos_labels = {
-        "Nafta (súper) entre 92 y 95 Ron": "Super 92",
-        "Nafta (tipo infinia) de 95 Ron o más": "Infinia/Premium",
-        "Gas Oil Grado 2": "Gasoil G2",
-        "Gas Oil Grado 3": "Gasoil G3",
-        "GNC": "GNC",
+    LABELS = {
+        "Nafta (súper) entre 92 y 95 Ron":    "⛽ Súper 92",
+        "Nafta (premium) de más de 95 Ron":   "🔵 Premium 95\\+",
+        "Gas Oil Grado 2":                    "🟤 Gasoil G2",
+        "Gas Oil Grado 3":                    "🟤 Gasoil G3",
+        "GNC":                                "🟢 GNC",
     }
 
-    if isinstance(stats, list):
-        for item in stats[:5]:
-            prod = item.get("producto", "")
-            label = productos_labels.get(prod, prod[:20])
-            prom  = item.get("precio_promedio")
-            mini  = item.get("precio_min")
-            maxi  = item.get("precio_max")
-            if prom:
-                lineas.append(
-                    f"*{escape_md(label)}*\n"
-                    f"  Promedio: `{escape_md(fmt_precio(prom))}`\n"
-                    f"  Mín: `{escape_md(fmt_precio(mini))}` · Máx: `{escape_md(fmt_precio(maxi))}`\n"
-                )
-    elif isinstance(stats, dict):
-        for prod, label in productos_labels.items():
-            prom = stats.get(prod, {}).get("promedio") or stats.get("precio_promedio")
-            if prom:
-                lineas.append(f"*{escape_md(label)}:* `{escape_md(fmt_precio(prom))}`")
+    lineas = [f"⛽ *Precios en {escape_md(provincia.title())}*\n"]
+    for item in stats["por_producto"]:
+        prod  = item.get("producto", "")
+        label = LABELS.get(prod, escape_md(prod[:22]))
+        prom  = item.get("precio_promedio")
+        mini  = item.get("precio_min")
+        maxi  = item.get("precio_max")
+        n     = item.get("count_estaciones", "")
+        if not prom:
+            continue
+        lineas.append(
+            f"*{label}*\n"
+            f"  Promedio: `{fmt_precio(prom)}/L`\n"
+            f"  Rango: `{fmt_precio(mini)}` — `{fmt_precio(maxi)}/L`"
+            + (f" \\({n} est\\.\\)" if n else "")
+        )
 
-    if len(lineas) <= 1:
-        lineas.append("_No hay datos disponibles para esta zona\\._")
-
-    ubicacion_txt = f"📍 _{escape_md(provincia or 'Argentina')}_ · " if provincia else ""
-    lineas.append(f"\n{ubicacion_txt}_Datos: Secretaría de Energía_")
+    lineas.append(f"\n_Datos: Secretaría de Energía_")
 
     await msg.reply_text(
         "\n".join(lineas),
         parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🗺️ Ver mapa completo", url="https://tankear.com.ar?utm_source=telegram&utm_medium=bot")],
-            [InlineKeyboardButton("🔔 Alertas de precio", callback_data="suscribir")],
-            [InlineKeyboardButton("← Menú principal",    callback_data="menu")],
+            [InlineKeyboardButton("🗺️ Ver mapa completo", url="https://tankear.com.ar?utm_source=tgbot")],
+            [InlineKeyboardButton("🔔 Crear alerta de precio", callback_data="suscribir")],
+            [InlineKeyboardButton("← Menú principal", callback_data="menu")],
         ]),
     )
 
