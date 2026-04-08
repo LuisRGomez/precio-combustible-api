@@ -1,370 +1,220 @@
 #!/usr/bin/env python3
-"""
-update_prices.py — cron diario (06:00 ART / 09:00 UTC)
+import os, sqlite3, requests
+from datetime import datetime, date, timedelta
 
-1. Descarga todos los precios vigentes de datos.energia.gob.ar (CKAN)
-2. Guarda/actualiza tabla `estaciones` en SQLite
-3. Detecta cambios respecto a la snapshot anterior
-4. Envía alertas Telegram a suscriptores activos
-5. Registra resultado en meta tabla
+DB_PATH    = os.environ.get("DB_PATH",            "/var/www/tankear/data/tankear.db")
+TG_TOKEN   = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+CANAL      = "@tankear_ar"
+UMBRAL_PC  = 1.5    # % mínimo para considerar "subida"
+PRECIO_MIN = 500.0  # filtro de outliers — nada por debajo de $500 es válido
 
-Ejecutar manualmente:  python3 update_prices.py
-Cron (como root):      0 9 * * * /var/www/tankear/venv/bin/python3 /var/www/tankear/api/update_prices.py >> /var/log/tankear-update.log 2>&1
-"""
-
-import json
-import logging
-import math
-import os
-import sys
-import time
-from datetime import datetime, date
-from typing import Optional
-
-import httpx
-
-# ── Path setup ──────────────────────────────────────────────────────────────────
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import db_sqlite as db
-
-# ── Logging ────────────────────────────────────────────────────────────────────
-logging.basicConfig(
-    format="%(asctime)s │ update_prices │ %(levelname)s │ %(message)s",
-    level=logging.INFO,
-)
-log = logging.getLogger("update_prices")
-
-# ── Config ─────────────────────────────────────────────────────────────────────
-CKAN_URL      = "https://datos.energia.gob.ar/api/3/action/datastore_search"
-RESOURCE_ID   = "80ac25de-a44a-4445-9215-0cf3e4974c5e"
-PAGE_SIZE     = 1000
-BOT_TOKEN     = os.getenv("TELEGRAM_BOT_TOKEN", "8673787872:AAGuQs_0-geYNII9dcwWaEu5eZ7I0J6FNW8")
-TG_API        = f"https://api.telegram.org/bot{BOT_TOKEN}"
-CAMBIO_MIN_PCT = 2.0   # alertar solo si el cambio es >= 2%
+PROD_CANONICAL = [
+    ("súper",   "Nafta Súper"),
+    ("super",   "Nafta Súper"),
+    ("premium", "Nafta Premium"),
+    ("grado 2", "Gasoil G2"),
+    ("grado 3", "Gasoil G3"),
+    ("gnc",     "GNC"),
+    ("gas natural", "GNC"),
+]
 
 
-# ── CKAN fetch ─────────────────────────────────────────────────────────────────
+def log(m): print(f"[{datetime.now().strftime('%H:%M:%S')}] {m}", flush=True)
+def _conn(): c = sqlite3.connect(DB_PATH); c.row_factory = sqlite3.Row; return c
 
-def _norm_prov(p: str) -> str:
-    MAP = {
-        "CIUDAD AUTÓNOMA DE BUENOS AIRES": "CABA",
-        "CIUDAD AUTONOMA DE BUENOS AIRES": "CABA",
-        "CIUDAD DE BUENOS AIRES": "CABA",
-    }
-    v = (p or "").strip().upper()
-    return MAP.get(v, v)
+def prod_label(raw):
+    p = (raw or "").lower()
+    for k, l in PROD_CANONICAL:
+        if k in p: return l
+    return raw.title() if raw else "?"
 
-
-def fetch_all_prices() -> list[dict]:
-    """Descarga todas las estaciones de CKAN con paginación."""
-    records = []
-    offset  = 0
-    total   = None
-
-    with httpx.Client(timeout=30) as client:
-        while True:
-            params = {
-                "resource_id": RESOURCE_ID,
-                "limit":       PAGE_SIZE,
-                "offset":      offset,
-            }
-            r = client.get(CKAN_URL, params=params)
-            r.raise_for_status()
-            data = r.json()
-            if not data.get("success"):
-                raise RuntimeError(f"CKAN error: {data.get('error')}")
-
-            result = data["result"]
-            if total is None:
-                total = result.get("total", 0)
-                log.info(f"Total registros CKAN: {total}")
-
-            batch = result.get("records", [])
-            if not batch:
-                break
-
-            for rec in batch:
-                try:
-                    precio_raw = rec.get("precio") or rec.get("precio_producto_empresa_provincia_agg")
-                    records.append({
-                        "empresa":             str(rec.get("empresa_bandera_nombre", "") or "").strip().upper(),
-                        "marca":               str(rec.get("empresa_bandera_nombre", "") or "").strip().upper(),
-                        "producto":            str(rec.get("producto_nombre", "") or "").strip(),
-                        "precio":              float(precio_raw) if precio_raw else None,
-                        "provincia":           _norm_prov(rec.get("provincia_nombre", "")),
-                        "localidad":           str(rec.get("localidad_nombre", "") or "").strip().upper(),
-                        "direccion":           str(rec.get("direccion", "") or "").strip(),
-                        "latitud":             float(rec["latitud"])  if rec.get("latitud")  else None,
-                        "longitud":            float(rec["longitud"]) if rec.get("longitud") else None,
-                        "fecha_vigencia":      str(rec.get("fecha_vigencia", "") or ""),
-                        "fecha_actualizacion": str(rec.get("fecha_actualizacion", "") or ""),
-                    })
-                except Exception as e:
-                    log.debug(f"skip record: {e}")
-
-            offset += PAGE_SIZE
-            log.info(f"  {len(records)}/{total} descargados...")
-            if len(batch) < PAGE_SIZE:
-                break
-            time.sleep(0.3)  # ser respetuosos con la API
-
-    return records
-
-
-# ── Detección de cambios ───────────────────────────────────────────────────────
-
-def _snapshot_precios(records: list[dict]) -> dict:
-    """
-    Construye un dict {(provincia, producto): precio_promedio}
-    para comparar entre runs.
-    """
-    from collections import defaultdict
-    sums   = defaultdict(list)
-    for r in records:
-        if r.get("precio") and r.get("provincia") and r.get("producto"):
-            sums[(r["provincia"], r["producto"])].append(r["precio"])
-    return {k: sum(v) / len(v) for k, v in sums.items()}
-
-
-def detect_changes(old_snap: dict, new_snap: dict) -> list[dict]:
-    """
-    Retorna lista de cambios con pct >= CAMBIO_MIN_PCT.
-    """
-    cambios = []
-    for key, nuevo in new_snap.items():
-        viejo = old_snap.get(key)
-        if viejo and viejo > 0:
-            pct = (nuevo - viejo) / viejo * 100
-            if abs(pct) >= CAMBIO_MIN_PCT:
-                prov, prod = key
-                cambios.append({
-                    "provincia": prov,
-                    "producto":  prod,
-                    "precio_antes": round(viejo, 2),
-                    "precio_ahora": round(nuevo, 2),
-                    "cambio_pct":   round(pct, 1),
-                })
-    cambios.sort(key=lambda x: abs(x["cambio_pct"]), reverse=True)
-    return cambios
-
-
-# ── Telegram notifications ─────────────────────────────────────────────────────
-
-def _esc(text: str) -> str:
-    """Escapa MarkdownV2."""
-    for ch in r"\_*[]()~`>#+-=|{}.!":
-        text = text.replace(ch, f"\\{ch}")
-    return text
-
-
-def _fmt_alerta(cambios: list[dict], provincia: str) -> str:
-    """Formatea el mensaje de alerta para una provincia."""
-    relevantes = [c for c in cambios if c["provincia"] == provincia][:5]
-    if not relevantes:
-        return ""
-
-    hoy = datetime.now().strftime("%d/%m/%Y")
-    lineas = [f"⛽ *Cambio de precios en {_esc(provincia)}* \\— {_esc(hoy)}\n"]
-    for c in relevantes:
-        flecha = "📈" if c["cambio_pct"] > 0 else "📉"
-        signo  = "+" if c["cambio_pct"] > 0 else ""
-        lineas.append(
-            f"{flecha} {_esc(c['producto'])}\n"
-            f"   `${c['precio_antes']:.0f}` → `${c['precio_ahora']:.0f}` "
-            f"\\({_esc(signo + str(c['cambio_pct']))}%\\)"
-        )
-    lineas.append("\n[Ver precios en Tankear](https://tankear\\.com\\.ar)")
-    return "\n".join(lineas)
-
-
-def send_telegram(chat_id: int, text: str) -> bool:
+def tg_send(chat_id, text, parse_mode="Markdown"):
+    if not TG_TOKEN: log("Sin token"); return False
     try:
-        with httpx.Client(timeout=10) as client:
-            r = client.post(f"{TG_API}/sendMessage", json={
-                "chat_id":    chat_id,
-                "text":       text,
-                "parse_mode": "MarkdownV2",
-                "disable_web_page_preview": True,
-            })
-            return r.status_code == 200
-    except Exception as e:
-        log.warning(f"send_telegram error chat_id={chat_id}: {e}")
-        return False
+        r = requests.post(
+            f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage",
+            json={"chat_id": chat_id, "text": text, "parse_mode": parse_mode,
+                  "disable_web_page_preview": True},
+            timeout=35)
+        if not r.ok: log(f"TG {r.status_code}: {r.text[:200]}"); return False
+        return True
+    except Exception as e: log(f"TG error: {e}"); return False
 
+def snapshot_hoy():
+    hoy = date.today().isoformat()
+    c = _conn()
+    ya = c.execute("SELECT COUNT(*) FROM precios_historico WHERE fecha_snapshot=?", (hoy,)).fetchone()[0]
+    if ya:
+        c.close(); log(f"Snapshot {hoy} ya existe ({ya} registros)"); return 0
+    rows = c.execute("""
+        SELECT empresa, bandera, producto, precio, provincia, localidad, direccion, fecha_vigencia
+        FROM estaciones WHERE precio >= ?
+    """, (PRECIO_MIN,)).fetchall()
+    ins = 0
+    for r in rows:
+        try:
+            c.execute("""INSERT OR IGNORE INTO precios_historico
+                (empresa, bandera, direccion, localidad, provincia, producto, precio, fecha_vigencia, fecha_snapshot)
+                VALUES (?,?,?,?,?,?,?,?,?)""",
+                (r["empresa"], r["bandera"], r["direccion"], r["localidad"],
+                 r["provincia"], r["producto"], r["precio"], r["fecha_vigencia"], hoy))
+            ins += 1
+        except: pass
+    c.commit(); c.close()
+    log(f"Snapshot {hoy}: {ins} registros (filtro >= ${PRECIO_MIN:.0f})")
+    return ins
 
-CANAL = "@tankear_ar"  # canal público de Telegram
+def get_promedios_desde_estaciones() -> dict:
+    """
+    Usa solo los precios con fecha_vigencia reciente (últimas 72hs desde
+    el registro más nuevo). Evita que datos viejos del dataset tiren el promedio.
+    """
+    c = _conn()
+    ultima = c.execute(
+        "SELECT MAX(fecha_vigencia) FROM estaciones WHERE precio >= ?", (PRECIO_MIN,)
+    ).fetchone()[0]
+    if not ultima:
+        c.close(); return {}
+    rows = c.execute("""
+        SELECT producto, AVG(precio) avg_p, COUNT(*) n
+        FROM estaciones
+        WHERE precio >= ?
+          AND fecha_vigencia >= datetime(?, '-72 hours')
+        GROUP BY producto HAVING n >= 5
+    """, (PRECIO_MIN, ultima)).fetchall()
+    c.close()
+    return {r["producto"]: round(r["avg_p"], 0) for r in rows}
 
-def post_to_channel(cambios: list[dict]) -> bool:
-    """Publica resumen de cambios en el canal @tankear_ar."""
-    if not cambios:
-        return False
-    hoy = datetime.now().strftime("%d/%m/%Y")
-    # Top 5 cambios más importantes de todo el país
-    top = cambios[:5]
-    lineas = [f"⛽ *Actualización de precios — {_esc(hoy)}*\n"]
-    for c in top:
-        flecha = "📈" if c["cambio_pct"] > 0 else "📉"
-        signo  = "+" if c["cambio_pct"] > 0 else ""
-        lineas.append(
-            f"{flecha} *{_esc(c['provincia'])}* — {_esc(c['producto'])}\n"
-            f"   `${c['precio_antes']:.0f}` → `${c['precio_ahora']:.0f}` "
-            f"\\({_esc(signo + str(c['cambio_pct']))}%\\)"
-        )
-    lineas.append(f"\n🔔 Suscribite a alertas personalizadas: @Tankear\\_bot")
-    lineas.append(f"[Ver todos los precios](https://tankear\\.com\\.ar)")
-    texto = "\n".join(lineas)
-    ok = send_telegram(CANAL, texto)
-    log.info(f"Canal @tankear_ar notificado: {'✓' if ok else '✗'}")
-    return ok
+def get_promedios_historico(fecha: str) -> dict:
+    c = _conn()
+    rows = c.execute("""
+        SELECT producto, AVG(precio) avg_p
+        FROM precios_historico
+        WHERE fecha_snapshot=? AND precio >= ?
+        GROUP BY producto HAVING COUNT(*) >= 10
+    """, (fecha, PRECIO_MIN)).fetchall()
+    c.close()
+    return {r["producto"]: round(r["avg_p"], 0) for r in rows}
 
+def get_fecha_comparacion() -> tuple:
+    """Busca el snapshot más útil: prioriza hace 7 días, sino el más reciente disponible."""
+    hoy = date.today().isoformat()
+    c = _conn()
+    rows = c.execute("""
+        SELECT DISTINCT fecha_snapshot FROM precios_historico
+        WHERE fecha_snapshot < ? ORDER BY fecha_snapshot DESC
+    """, (hoy,)).fetchall()
+    c.close()
+    if not rows: return None, None
+    fechas = [r["fecha_snapshot"] for r in rows]
+    for dias in range(7, 0, -1):
+        objetivo = (date.today() - timedelta(days=dias)).isoformat()
+        if objetivo in fechas:
+            return objetivo, dias
+    ultima = fechas[-1]
+    dias = (date.today() - date.fromisoformat(ultima)).days
+    return ultima, dias
 
-def check_personal_alerts(records: list[dict]) -> int:
-    """Verifica alertas personalizadas y notifica si se cumple la condición."""
-    alertas = db.get_all_active_alerts()
-    if not alertas:
-        return 0
+def check_alerts():
+    c = _conn(); alerts = c.execute("SELECT * FROM telegram_alerts WHERE activo=1").fetchall(); c.close()
+    triggered = 0
+    for a in alerts:
+        prod = (a["producto"] or "").lower(); c = _conn()
+        q = "SELECT AVG(precio) avg_p FROM estaciones WHERE LOWER(producto) LIKE ? AND precio >= ?"
+        params = [f"%{prod}%", PRECIO_MIN]
+        if a["provincia"]: q += " AND UPPER(provincia)=?"; params.append(a["provincia"].upper())
+        row = c.execute(q, params).fetchone(); c.close()
+        if not row or row["avg_p"] is None: continue
+        pa = round(row["avg_p"], 0)
+        if pa <= a["precio_max"]:
+            pv = f" en {a['provincia'].title()}" if a["provincia"] else ""
+            msg = (f"🔔 *¡Alerta!*\n*{a['producto']}*{pv}\n"
+                   f"Precio actual: *${pa:.0f}/L* ✅\nUmbral: ${a['precio_max']:.0f}\n"
+                   f"[Ver →](https://tankear.com.ar)")
+            if tg_send(a["chat_id"], msg):
+                c = _conn()
+                c.execute("UPDATE telegram_alerts SET triggered_at=datetime('now'),activo=0 WHERE id=?", (a["id"],))
+                c.commit(); c.close()
+                triggered += 1
+    return triggered
 
-    # Construir índice {(provincia_upper, producto_upper): precio_promedio}
-    from collections import defaultdict
-    sums = defaultdict(list)
-    for r in records:
-        if r.get("precio") and r.get("provincia") and r.get("producto"):
-            sums[(r["provincia"].upper(), r["producto"].upper())].append(float(r["precio"]))
-    precios_actuales = {k: sum(v)/len(v) for k, v in sums.items()}
-
-    notificados = 0
-    for alerta in alertas:
-        chat_id   = alerta["chat_id"]
-        producto  = alerta["producto"].upper()
-        precio_max = float(alerta["precio_max"])
-        provincia = (alerta.get("provincia") or "").upper()
-
-        # Buscar precio actual para este producto+provincia
-        precio_actual = None
-        if provincia:
-            precio_actual = precios_actuales.get((provincia, producto))
-        if precio_actual is None:
-            # Buscar en cualquier provincia
-            matches = [v for (p, pr), v in precios_actuales.items() if pr == producto]
-            if matches:
-                precio_actual = min(matches)
-
-        if precio_actual and precio_actual <= precio_max:
-            texto = (
-                f"🔔 *¡Alerta de precio activada\\!*\n\n"
-                f"⛽ {_esc(alerta['producto'])}\n"
-                f"💰 Precio actual: `${precio_actual:.0f}/L`\n"
-                f"📉 Bajó de tu umbral: `${precio_max:.0f}/L`\n"
-                f"📍 {_esc(provincia) if provincia else 'Argentina'}\n\n"
-                f"[Ver estaciones en Tankear](https://tankear\\.com\\.ar)"
-            )
-            if send_telegram(chat_id, texto):
-                db.mark_alert_triggered(alerta["id"])
-                notificados += 1
-                log.info(f"  ✓ Alerta personal disparada: chat_id={chat_id} {alerta['producto']} < ${precio_max}")
-            time.sleep(0.05)
-
-    return notificados
-
-
-def notify_subscribers(cambios: list[dict]) -> int:
-    """Envía alertas a suscriptores activos. Retorna cantidad notificados."""
-    if not cambios:
-        log.info("Sin cambios significativos — no se envían alertas")
-        return 0
-
-    subs = db.get_telegram_subscribers(activo=True)
-    if not subs:
-        log.info("Sin suscriptores activos")
-        return 0
-
-    notificados = 0
-    provincias_cambiadas = {c["provincia"] for c in cambios}
-
-    for sub in subs:
-        chat_id  = sub["chat_id"]
-        provincia = (sub.get("provincia") or sub.get("zona") or "").upper().strip()
-
-        # Si el sub tiene provincia y hay cambios ahí → alerta específica
-        if provincia and provincia in provincias_cambiadas:
-            texto = _fmt_alerta(cambios, provincia)
-        # Si no tiene zona → mandar resumen de las provincias con más cambios
-        elif not provincia:
-            top_prov = list(provincias_cambiadas)[:2]
-            partes = []
-            for p in top_prov:
-                t = _fmt_alerta(cambios, p)
-                if t:
-                    partes.append(t)
-            texto = "\n\n".join(partes) if partes else ""
-        else:
-            continue  # tiene provincia pero no cambió
-
-        if texto and send_telegram(chat_id, texto):
-            notificados += 1
-            log.info(f"  ✓ notificado chat_id={chat_id} (@{sub.get('username', '?')})")
-        time.sleep(0.05)  # rate limit Telegram
-
-    return notificados
-
-
-# ── Main ───────────────────────────────────────────────────────────────────────
+def get_subscribers():
+    c = _conn(); rows = c.execute("SELECT * FROM telegram_subscribers WHERE activo=1").fetchall()
+    c.close(); return [dict(r) for r in rows]
 
 def main():
-    log.info("=" * 60)
-    log.info(f"update_prices.py — {datetime.now().isoformat()}")
-    db.init_db()
+    log("=" * 55); log("update_prices.py — inicio")
+    if not TG_TOKEN: log("❌ Sin TELEGRAM_BOT_TOKEN"); return
 
-    # Leer snapshot anterior (de meta)
-    conn = db._conn()
-    row  = conn.execute("SELECT value FROM meta WHERE key='price_snapshot'").fetchone()
-    conn.close()
-    old_snap = json.loads(row[0]) if row else {}
+    precios_hoy = get_promedios_desde_estaciones()
+    log(f"Productos válidos en DB: {len(precios_hoy)}")
+    for p, v in precios_hoy.items(): log(f"  {prod_label(p)}: ${v:.0f}")
+    if not precios_hoy: log("❌ Sin datos"); return
 
-    # Descargar precios frescos
-    log.info("Descargando precios de CKAN...")
-    try:
-        records = fetch_all_prices()
-    except Exception as e:
-        log.error(f"Error descargando CKAN: {e}")
-        sys.exit(1)
+    snapshot_hoy()
 
-    log.info(f"Descargados {len(records)} registros")
+    fecha_cmp, dias_atras = get_fecha_comparacion()
+    precios_ant = {}
+    if fecha_cmp:
+        precios_ant = get_promedios_historico(fecha_cmp)
+        log(f"Comparando con hace {dias_atras} día(s): {fecha_cmp} ({len(precios_ant)} productos)")
+    else:
+        log("Sin snapshots anteriores — primer día")
 
-    # Guardar en SQLite (reemplaza todo)
-    log.info("Guardando en SQLite...")
-    db.save_estaciones(records)
+    cambios = []; vistos = set()
+    for prod, ph in precios_hoy.items():
+        pa = precios_ant.get(prod)
+        if not pa or pa <= 0: continue
+        lb = prod_label(prod)
+        if lb in vistos or lb == "?": continue
+        dp = (ph - pa) / pa * 100
+        if abs(dp) >= UMBRAL_PC:
+            vistos.add(lb)
+            cambios.append({"lbl": lb, "ph": ph, "pa": round(pa, 0), "dp": round(dp, 1)})
 
-    # Nueva snapshot
-    new_snap = _snapshot_precios(records)
+    log(f"Cambios >={UMBRAL_PC}%: {len(cambios)}")
+    for c in cambios: log(f"  {c['lbl']}: ${c['pa']:.0f} → ${c['ph']:.0f} ({c['dp']:+.1f}%)")
 
-    # Detectar cambios
-    cambios = detect_changes(old_snap, new_snap)
-    log.info(f"Cambios detectados: {len(cambios)} combinaciones provincia/producto")
-    for c in cambios[:10]:
-        log.info(f"  {c['provincia']} | {c['producto']}: {c['precio_antes']} → {c['precio_ahora']} ({c['cambio_pct']:+.1f}%)")
+    hoy_fmt = datetime.now().strftime("%d/%m/%Y")
+    if cambios:
+        lns = [f"⛽ *Tankear — {hoy_fmt}*\n"]
+        subio = [c for c in cambios if c["dp"] > 0]
+        bajo  = [c for c in cambios if c["dp"] < 0]
+        if subio:
+            lns.append("🔴 *Subas:*")
+            for c in sorted(subio, key=lambda x: x["dp"], reverse=True):
+                lns.append(f"  • *{c['lbl']}*: ${c['pa']:.0f} → ${c['ph']:.0f} (+{c['dp']:.1f}%)")
+        if bajo:
+            lns.append("🟢 *Bajas:*")
+            for c in sorted(bajo, key=lambda x: x["dp"]):
+                lns.append(f"  • *{c['lbl']}*: ${c['pa']:.0f} → ${c['ph']:.0f} ({c['dp']:.1f}%)")
+        if dias_atras: lns.append(f"\n_vs hace {dias_atras} día(s)_")
+    else:
+        estable_txt = f" (sin cambios en {dias_atras} días)" if dias_atras else ""
+        lns = [f"⛽ *Tankear — {hoy_fmt}*\n", f"Precios estables{estable_txt}:\n"]
+        vistos2 = set()
+        for prod, precio in sorted(precios_hoy.items(), key=lambda x: x[1], reverse=True):
+            lb = prod_label(prod)
+            if lb in vistos2 or lb == "?": continue
+            vistos2.add(lb); lns.append(f"• *{lb}*: ${precio:.0f}/L")
 
-    # Publicar en canal @tankear_ar
-    post_to_channel(cambios)
+    lns.append(f"\n[Ver mapa →](https://tankear.com.ar)")
+    ok = tg_send(CANAL, "\n".join(lns))
+    log(f"Canal {CANAL}: {'✅' if ok else '❌'}")
 
-    # Chequear alertas personalizadas
-    n_alertas = check_personal_alerts(records)
-    log.info(f"Alertas personalizadas disparadas: {n_alertas}")
+    if cambios:
+        subs = get_subscribers(); log(f"Subs: {len(subs)}"); n = 0
+        for s in subs:
+            nm = s.get("first_name") or "ahí"
+            lns2 = [f"⛽ *¡Hola {nm}!* Cambios de precio:\n"]
+            for c in sorted(cambios, key=lambda x: x["dp"], reverse=True):
+                e = "🔴" if c["dp"] > 0 else "🟢"; sg = "+" if c["dp"] > 0 else ""
+                lns2.append(f"{e} *{c['lbl']}*: ${c['ph']:.0f}/L ({sg}{c['dp']:.1f}%)")
+            lns2.append("\n[Ver →](https://tankear.com.ar)")
+            if tg_send(s["chat_id"], "\n".join(lns2)): n += 1
+        log(f"Notificados: {n}/{len(subs)}")
 
-    # Notificar suscriptores 1:1
-    n = notify_subscribers(cambios)
-    log.info(f"Suscriptores notificados: {n}")
+    t = check_alerts(); log(f"Alertas: {t}")
+    log("update_prices.py — OK ✅")
 
-    # Guardar nueva snapshot en meta
-    snap_str = json.dumps({f"{k[0]}||{k[1]}": v for k, v in new_snap.items()})
-    conn = db._conn()
-    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('price_snapshot', ?)", (snap_str,))
-    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_update', ?)", (datetime.now().isoformat(),))
-    conn.commit()
-    conn.close()
-
-    log.info(f"✅ update_prices.py completado — {len(records)} estaciones, {len(cambios)} cambios, {n} notificados")
-
-
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()

@@ -1,1129 +1,651 @@
+#!/usr/bin/env python3
 """
-Tankear Bot — @Tankear_bot
-Bot de Telegram para Tankear.com.ar
+telegram_bot.py — Bot interactivo @Tankear_bot con long polling.
+Corre como servicio systemd (Restart=always).
 
 Comandos:
-  /start      — Bienvenida + menú principal
-  /precios    — Precios de nafta en tu zona
-  /dolar      — Dólar blue y oficial del día
-  /cotizar    — Cotizá tu seguro de auto
-  /suscribir  — Suscribite a alertas de precio
-  /ayuda      — Ayuda y todos los comandos
-
-Env vars:
-  TELEGRAM_BOT_TOKEN  — Token del bot (BotFather)
-  TANKEAR_API_BASE    — Base URL de la API (default: https://tankear.com.ar/api)
+  /start           → bienvenida + menú
+  /precios [prov]  → precios actuales por provincia
+  /barata [prod prov] → estaciones más baratas
+  /alerta prod max [prov] → crear alerta de precio
+  /misalertas      → ver alertas activas
+  /cancelar_alerta N → cancelar alerta #N
+  /suscribir [prov]→ suscribirse a actualizaciones diarias
+  /baja            → darse de baja
+  /ayuda           → lista de comandos
+  /scraper         → (admin) lanzar scraper a demanda
+  /status          → (admin) estado del sistema
 """
 
-import asyncio
-import logging
 import os
-import re
-import sys
-import httpx
+import sqlite3
+import requests
+import subprocess
+import time
 from datetime import datetime
+from collections import defaultdict
 
-# db_sqlite está en el mismo directorio en producción
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-try:
-    import db_sqlite as db
-    db.init_db()
-    _DB_OK = True
-except Exception as _e:
-    _DB_OK = False
-    logging.getLogger("tankear_bot").warning(f"db_sqlite no disponible: {_e}")
+# ── Config ────────────────────────────────────────────────────────────────────
+DB_PATH   = os.environ.get("DB_PATH",            "/var/www/tankear/data/tankear.db")
+TG_TOKEN  = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+API_BASE  = f"https://api.telegram.org/bot{TG_TOKEN}"
+SITIO     = "https://tankear.com.ar"
+ADMIN_ID  = 1209008738
 
-from telegram import (
-    Update,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    BotCommand,
-)
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    MessageHandler,
-    ConversationHandler,
-    ContextTypes,
-    filters,
-)
-from telegram.constants import ParseMode
-
-# ── Configuración ──────────────────────────────────────────────────────────────
-
-logging.basicConfig(
-    format="%(asctime)s │ %(name)s │ %(levelname)s │ %(message)s",
-    level=logging.INFO,
-)
-logger = logging.getLogger("tankear_bot")
-
-TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN", "8673787872:AAGuQs_0-geYNII9dcwWaEu5eZ7I0J6FNW8")
-API_BASE = os.getenv("TANKEAR_API_BASE",   "https://tankear.com.ar/api")
-
-# ConversationHandler states
-ESPERANDO_CONTACTO  = 1
-ESPERANDO_ZONA      = 2
-ALERTA_PRODUCTO     = 10
-ALERTA_PRECIO       = 11
-ALERTA_PROVINCIA    = 12
-REPORTAR_EMPRESA    = 20
-REPORTAR_PRODUCTO   = 21
-REPORTAR_PRECIO     = 22
-
-# Normalización de productos para alertas
-PRODUCTOS_NORM = {
-    "super":   "Nafta (súper) entre 92 y 95 Ron",
-    "súper":   "Nafta (súper) entre 92 y 95 Ron",
-    "nafta":   "Nafta (súper) entre 92 y 95 Ron",
-    "premium": "Nafta (premium) de más de 95 Ron",
-    "infinia": "Nafta (premium) de más de 95 Ron",
-    "gasoil":  "Gas Oil Grado 2",
-    "diesel":  "Gas Oil Grado 2",
-    "gasoil3": "Gas Oil Grado 3",
-    "gnc":     "GNC",
+PROVINCIAS_VALIDAS = {
+    "buenos aires", "caba", "capital federal", "cordoba", "córdoba",
+    "santa fe", "mendoza", "tucuman", "tucumán", "entre rios", "entre ríos",
+    "salta", "misiones", "chaco", "corrientes", "santiago del estero",
+    "san juan", "jujuy", "rio negro", "río negro", "neuquen", "neuquén",
+    "formosa", "chubut", "san luis", "catamarca", "la rioja", "la pampa",
+    "santa cruz", "tierra del fuego",
 }
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
+PROD_CANONICAL = [
+    ("súper",     "Nafta Súper"),
+    ("super",     "Nafta Súper"),
+    ("premium",   "Nafta Premium"),
+    ("grado 2",   "Gasoil G2"),
+    ("grado 3",   "Gasoil G3"),
+    ("gnc",       "GNC"),
+    ("gas natural", "GNC"),
+    ("infinia",   "Nafta Premium"),
+]
 
-def escape_md(text: str) -> str:
-    """Escapa caracteres especiales para MarkdownV2."""
-    chars = r"\_*[]()~`>#+-=|{}.!"
-    return re.sub(f"([{re.escape(chars)}])", r"\\\1", str(text))
+PROV_NORM = {
+    "capital federal": "CABA",
+    "caba":            "CABA",
+    "buenos aires":    "BUENOS AIRES",
+    "córdoba":         "CORDOBA",
+    "cordoba":         "CORDOBA",
+    "tucumán":         "TUCUMAN",
+    "tucuman":         "TUCUMAN",
+    "entre ríos":      "ENTRE RIOS",
+    "entre rios":      "ENTRE RIOS",
+    "río negro":       "RIO NEGRO",
+    "rio negro":       "RIO NEGRO",
+    "neuquén":         "NEUQUEN",
+    "neuquen":         "NEUQUEN",
+}
 
-def fmt_precio(p: float | None) -> str:
-    if p is None:
-        return "—"
-    return f"${p:,.0f}".replace(",", ".")
 
-async def get_estadisticas(provincia: str = "", localidad: str = "") -> dict | None:
-    """Llama a /precios/estadisticas en la API de Tankear."""
+# ── Helpers ───────────────────────────────────────────────────────────────────
+def log(msg: str):
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def norm_prov(s: str) -> str:
+    k = (s or "").lower().strip()
+    return PROV_NORM.get(k, s.upper().strip())
+
+
+def prod_label(raw: str) -> str:
+    p = (raw or "").lower()
+    for key, label in PROD_CANONICAL:
+        if key in p:
+            return label
+    return raw.title() if raw else "?"
+
+
+def _conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+# ── Telegram API ──────────────────────────────────────────────────────────────
+def api(method: str, **kwargs) -> dict:
     try:
-        params = {}
-        if provincia: params["provincia"] = provincia
-        if localidad: params["localidad"] = localidad
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(f"{API_BASE}/precios/estadisticas", params=params)
-            if r.status_code == 200:
-                return r.json()
+        r = requests.post(f"{API_BASE}/{method}", json=kwargs, timeout=35)
+        return r.json()
     except Exception as e:
-        logger.warning(f"get_estadisticas error: {e}")
-    return None
+        log(f"API error {method}: {e}")
+        return {}
 
-async def get_dolar() -> dict | None:
-    """Llama a la API de Bluelytics directamente."""
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get("https://api.bluelytics.com.ar/v2/latest")
-            if r.status_code == 200:
-                return r.json()
-    except Exception as e:
-        logger.warning(f"get_dolar error: {e}")
-    return None
 
-async def post_lead(mail: str = "", celular: str = "", zona: str = "", chat_id: int = 0) -> bool:
-    """Registra un lead en la API de Tankear."""
-    try:
-        payload = {
-            "mail":         mail,
-            "celular":      celular,
-            "zona":         zona,
-            "pagina_origen": "telegram_bot",
-            "ip":           f"tg:{chat_id}",
-        }
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.post(f"{API_BASE}/leads", json=payload)
-            return r.status_code in (200, 201)
-    except Exception as e:
-        logger.warning(f"post_lead error: {e}")
-    return False
-
-# ── Keyboards ──────────────────────────────────────────────────────────────────
-
-def kb_menu_principal() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("⛽ Precios nafta",  callback_data="precios"),
-            InlineKeyboardButton("💵 Dólar hoy",      callback_data="dolar"),
-        ],
-        [
-            InlineKeyboardButton("🛡️ Cotizar seguro", callback_data="cotizar"),
-            InlineKeyboardButton("🔔 Alertas gratis", callback_data="suscribir"),
-        ],
-        [
-            InlineKeyboardButton("🌐 Abrir Tankear",  url="https://tankear.com.ar"),
-        ],
-    ])
-
-def kb_volver() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("← Menú principal", callback_data="menu")],
-    ])
-
-def kb_cotizar() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(
-            "🛡️ Ver mis cotizaciones →",
-            url="https://tankear.com.ar/cotizador?utm_source=telegram&utm_medium=bot&utm_campaign=tankear_bot"
-        )],
-        [InlineKeyboardButton("← Menú principal", callback_data="menu")],
-    ])
-
-# ── Mensajes ───────────────────────────────────────────────────────────────────
-
-BIENVENIDA = """
-⛽ *¡Hola\\! Soy el bot de Tankear\\.com\\.ar*
-
-Tu copiloto en el auto argentino\\. Desde acá podés:
-
-🔍 Ver precios de nafta en tiempo real
-💵 Consultar el dólar blue y oficial
-🛡️ Cotizar tu seguro de auto
-🔔 Suscribirte a alertas de precio
-
-*¿Qué querés hacer hoy?*
-"""
-
-AYUDA = """
-*Tankear Bot* — Comandos disponibles:
-
-⛽ /precios — Precios de nafta en tu zona
-💵 /dolar — Dólar blue y oficial hoy
-🛡️ /cotizar — Cotizá tu seguro de auto
-🔔 /suscribir — Alertas de precio por WhatsApp o email
-❓ /ayuda — Este mensaje
-
-🌐 Web: [tankear\\.com\\.ar](https://tankear.com.ar)
-📢 Canal: [@Tankear\\_ar](https://t.me/Tankear_ar)
-"""
-
-# ── Handlers de comandos ───────────────────────────────────────────────────────
-
-async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        BIENVENIDA,
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=kb_menu_principal(),
-    )
-
-async def cmd_ayuda(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        AYUDA,
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=kb_volver(),
-        disable_web_page_preview=True,
-    )
-
-async def cmd_dolar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = update.message or update.callback_query.message
-    data = await get_dolar()
-
-    if not data:
-        await msg.reply_text(
-            "⚠️ No pude obtener la cotización en este momento\\. Intentá en unos minutos\\.",
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=kb_volver(),
-        )
-        return
-
-    blue_v    = data.get("blue",    {}).get("value_sell",    0)
-    oficial_v = data.get("oficial", {}).get("value_sell",    0)
-    blue_c    = data.get("blue",    {}).get("value_buy",     0)
-    oficial_c = data.get("oficial", {}).get("value_buy",     0)
-
-    brecha = ((blue_v - oficial_v) / oficial_v * 100) if oficial_v else 0
-    super_usd = round(1050 / blue_v, 3) if blue_v else 0  # precio aprox super 92
-
-    texto = f"""
-💵 *Dólar hoy* — {escape_md(datetime.now().strftime("%d/%m/%Y %H:%M"))}
-
-*🔵 Blue*
-Compra: `${escape_md(fmt_precio(blue_c))}`   Venta: `${escape_md(fmt_precio(blue_v))}`
-
-*🟢 Oficial \\(BNA\\)*
-Compra: `${escape_md(fmt_precio(oficial_c))}`   Venta: `${escape_md(fmt_precio(oficial_v))}`
-
-*📊 Brecha cambiaria:* `{escape_md(f"{brecha:.1f}")}%`
-*⛽ Súper 92 en USD:* `≈ USD {escape_md(str(super_usd))}/L` \\(al blue\\)
-
-_Datos: Bluelytics · actualizado cada 15 min_
-"""
-    await msg.reply_text(
-        texto.strip(),
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🛡️ ¿Ajustó tu seguro?", url="https://tankear.com.ar/cotizador?utm_source=telegram&utm_medium=bot&utm_campaign=dolar_bot")],
-            [InlineKeyboardButton("← Menú principal", callback_data="menu")],
-        ]),
-    )
-
-async def cmd_precios(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = update.message or update.callback_query.message
-    chat_id = update.effective_user.id if update.effective_user else 0
-
-    # 1. Args del comando: /precios Córdoba
-    args = context.args or []
-    provincia = " ".join(args).strip().upper() if args else ""
-
-    # 2. Perfil guardado en DB
-    if not provincia and _DB_OK:
-        try:
-            subs = [s for s in db.get_telegram_subscribers() if s["chat_id"] == chat_id]
-            if subs and subs[0].get("provincia"):
-                provincia = subs[0]["provincia"].upper()
-        except Exception:
-            pass
-
-    # 3. Default: Buenos Aires
-    if not provincia:
-        provincia = "BUENOS AIRES"
-
-    await msg.reply_text("🔍 _Buscando precios\\.\\.\\._", parse_mode=ParseMode.MARKDOWN_V2)
-
-    stats = await get_estadisticas(provincia=provincia)
-
-    if not stats or not stats.get("por_producto"):
-        await msg.reply_text(
-            "⚠️ No pude obtener precios en este momento\\. "
-            "Probá en [tankear\\.com\\.ar](https://tankear.com.ar)",
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=kb_volver(),
-        )
-        return
-
-    LABELS = {
-        "Nafta (súper) entre 92 y 95 Ron":    "⛽ Súper 92",
-        "Nafta (premium) de más de 95 Ron":   "🔵 Premium 95\\+",
-        "Gas Oil Grado 2":                    "🟤 Gasoil G2",
-        "Gas Oil Grado 3":                    "🟤 Gasoil G3",
-        "GNC":                                "🟢 GNC",
+def send(chat_id, text: str, reply_markup=None, parse_mode="Markdown"):
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": parse_mode,
+        "disable_web_page_preview": True,
     }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    return api("sendMessage", **payload)
 
-    lineas = [f"⛽ *Precios en {escape_md(provincia.title())}*\n"]
-    for item in stats["por_producto"]:
-        prod  = item.get("producto", "")
-        label = LABELS.get(prod, escape_md(prod[:22]))
-        prom  = item.get("precio_promedio")
-        mini  = item.get("precio_min")
-        maxi  = item.get("precio_max")
-        n     = item.get("count_estaciones", "")
-        if not prom:
-            continue
-        lineas.append(
-            f"*{label}*\n"
-            f"  Promedio: `{fmt_precio(prom)}/L`\n"
-            f"  Rango: `{fmt_precio(mini)}` — `{fmt_precio(maxi)}/L`"
-            + (f" \\({n} est\\.\\)" if n else "")
-        )
 
-    lineas.append(f"\n_Datos: Secretaría de Energía_")
+def get_updates(offset: int = 0, timeout: int = 30) -> list:
+    data = api("getUpdates", offset=offset, timeout=timeout,
+               allowed_updates=["message"])
+    return data.get("result", [])
 
-    await msg.reply_text(
-        "\n".join(lineas),
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🗺️ Ver mapa completo", url="https://tankear.com.ar?utm_source=tgbot")],
-            [InlineKeyboardButton("🔔 Crear alerta de precio", callback_data="suscribir")],
-            [InlineKeyboardButton("← Menú principal", callback_data="menu")],
-        ]),
+
+# ── DB helpers ────────────────────────────────────────────────────────────────
+def save_subscriber(chat_id: int, username: str, first_name: str,
+                    provincia: str = "", zona: str = ""):
+    conn = _conn()
+    conn.execute("""
+        INSERT INTO telegram_subscribers
+            (chat_id, username, first_name, zona, provincia, activo, updated_at)
+        VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
+        ON CONFLICT(chat_id) DO UPDATE SET
+            username   = excluded.username,
+            first_name = excluded.first_name,
+            zona       = CASE WHEN excluded.zona != '' THEN excluded.zona ELSE zona END,
+            provincia  = CASE WHEN excluded.provincia != '' THEN excluded.provincia ELSE provincia END,
+            activo     = 1,
+            updated_at = datetime('now')
+    """, (chat_id, username or "", first_name or "", zona or "", provincia or ""))
+    conn.commit()
+    conn.close()
+
+
+def get_subscriber(chat_id: int) -> dict:
+    conn = _conn()
+    row = conn.execute(
+        "SELECT * FROM telegram_subscribers WHERE chat_id=?", (chat_id,)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else {}
+
+
+def unsub(chat_id: int):
+    conn = _conn()
+    conn.execute(
+        "UPDATE telegram_subscribers SET activo=0 WHERE chat_id=?", (chat_id,)
     )
+    conn.commit()
+    conn.close()
 
-async def cmd_cotizar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    msg = update.message or update.callback_query.message
-    texto = (
-        "🛡️ *Cotizador de seguro de auto*\n\n"
-        "Comparamos más de 20 aseguradoras en segundos\\.\n\n"
-        "¿En qué *año* fabricaron tu auto? \\(ej: `2019`\\)\n\n"
-        "_También podés ir directo al cotizador:_"
+
+def log_msg(chat_id: int, username: str, first_name: str,
+            text: str, intencion: str, score: int = 0):
+    try:
+        conn = _conn()
+        conn.execute("""
+            INSERT INTO telegram_messages
+                (chat_id, username, first_name, text, intencion, score_lead)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (chat_id, username or "", first_name or "", text or "", intencion, score))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+def create_alert(chat_id: int, username: str, producto: str,
+                 precio_max: float, provincia: str = "") -> int:
+    conn = _conn()
+    cur = conn.execute("""
+        INSERT INTO telegram_alerts (chat_id, username, producto, precio_max, provincia)
+        VALUES (?, ?, ?, ?, ?)
+    """, (chat_id, username or "", producto, precio_max, provincia or ""))
+    conn.commit()
+    aid = cur.lastrowid
+    conn.close()
+    return aid
+
+
+def get_alerts(chat_id: int) -> list:
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT * FROM telegram_alerts WHERE chat_id=? AND activo=1 ORDER BY created_at DESC",
+        (chat_id,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def cancel_alert(alert_id: int, chat_id: int):
+    conn = _conn()
+    conn.execute(
+        "UPDATE telegram_alerts SET activo=0 WHERE id=? AND chat_id=?",
+        (alert_id, chat_id)
     )
-    await msg.reply_text(
-        texto,
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton(
-                "🛡️ Cotizar en tankear.com.ar →",
-                url="https://tankear.com.ar/cotizador?utm_source=tgbot"
-            )],
-            [InlineKeyboardButton("← Menú principal", callback_data="menu")],
-        ]),
-    )
-    context.user_data["cotizar_step"] = "anio"
+    conn.commit()
+    conn.close()
 
 
-async def cotizar_recibir_anio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if context.user_data.get("cotizar_step") != "anio":
-        return
-    texto = update.message.text.strip()
-    if not texto.isdigit() or not (1990 <= int(texto) <= 2026):
-        await update.message.reply_text(
-            "Escribí solo el año\\. Ej: `2019`",
-            parse_mode=ParseMode.MARKDOWN_V2
-        )
-        return
-    anio = texto
-    context.user_data["cotizar_anio"] = anio
-    context.user_data["cotizar_step"] = None
+# ── Queries de precios ────────────────────────────────────────────────────────
+def precios_provincia(provincia: str = None) -> dict:
+    """Retorna {label: {avg, min}} usando solo registros recientes (últimas 72h)."""
+    conn = _conn()
+    fecha_filter = "fecha_vigencia >= datetime((SELECT MAX(fecha_vigencia) FROM estaciones), '-72 hours')"
+    precio_filter = "precio >= 1000"
 
-    url = f"https://tankear.com.ar/cotizador?anio={anio}&utm_source=tgbot"
-    await update.message.reply_text(
-        f"✅ Auto *{escape_md(anio)}* — cotizá ahora:",
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton(f"🛡️ Ver cotizaciones para {anio} →", url=url)],
-            [InlineKeyboardButton("← Menú principal", callback_data="menu")],
-        ]),
-    )
-
-# ── Conversación: suscribir ────────────────────────────────────────────────────
-
-async def cmd_suscribir(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    msg = update.message or update.callback_query.message
-    texto = """
-🔔 *Alertas de precio gratis*
-
-Te avisamos cuando cambien los precios de nafta en tu zona\\.
-
-✉️ Mandame tu *email o número de WhatsApp* \\(con código de área, ej: 1150001234\\):
-"""
-    await msg.reply_text(texto.strip(), parse_mode=ParseMode.MARKDOWN_V2)
-    return ESPERANDO_CONTACTO
-
-async def recibir_contacto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    texto = update.message.text.strip()
-    chat_id = update.effective_user.id
-
-    # Detectar si es email o celular
-    es_email   = "@" in texto and "." in texto
-    es_celular = re.match(r"^\+?[\d\s\-]{6,15}$", texto)
-
-    if not es_email and not es_celular:
-        await update.message.reply_text(
-            "❌ No reconocí ese formato\\. Mandame un *email* \\(ej: juan@gmail\\.com\\) o un *celular* \\(ej: 1150001234\\)\\.",
-            parse_mode=ParseMode.MARKDOWN_V2,
-        )
-        return ESPERANDO_CONTACTO
-
-    context.user_data["contacto"] = texto
-    context.user_data["es_email"] = es_email
-
-    await update.message.reply_text(
-        "📍 ¿En qué *provincia* estás? \\(ej: Buenos Aires, Córdoba, Mendoza\\)\n\nO mandá /saltar para continuar sin zona\\.",
-        parse_mode=ParseMode.MARKDOWN_V2,
-    )
-    return ESPERANDO_ZONA
-
-async def recibir_zona(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    zona    = update.message.text.strip()
-    chat_id = update.effective_user.id
-    contacto = context.user_data.get("contacto", "")
-    es_email  = context.user_data.get("es_email", False)
-
-    context.user_data["zona"] = zona
-
-    ok = await post_lead(
-        mail    = contacto if es_email else "",
-        celular = contacto if not es_email else "",
-        zona    = zona,
-        chat_id = chat_id,
-    )
-
-    # Guardar en SQLite para poder enviar alertas Telegram push
-    if _DB_OK:
-        try:
-            user = update.effective_user
-            db.save_telegram_subscriber(
-                chat_id    = chat_id,
-                username   = user.username or "",
-                first_name = user.first_name or "",
-                zona       = zona,
-                provincia  = zona,  # refinamos con geolocalización si hay coords
-                contacto   = contacto,
-            )
-        except Exception as e:
-            logger.warning(f"save_subscriber error: {e}")
-
-    if ok:
-        await update.message.reply_text(
-            f"✅ *¡Listo\\!* Te suscribiste a las alertas de Tankear\\.\n\n"
-            f"📍 Zona: _{escape_md(zona)}_\n"
-            f"📬 Contacto: `{escape_md(contacto)}`\n\n"
-            f"Te avisamos cuando cambien los precios en tu zona 🚗",
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=kb_menu_principal(),
-        )
+    if provincia:
+        rows = conn.execute(f"""
+            SELECT producto, AVG(precio) AS avg_p, MIN(precio) AS min_p
+            FROM estaciones
+            WHERE {precio_filter} AND {fecha_filter}
+              AND UPPER(provincia) = ?
+            GROUP BY producto HAVING COUNT(*) >= 3
+            ORDER BY producto
+        """, (provincia.upper(),)).fetchall()
     else:
-        await update.message.reply_text(
-            "⚠️ Hubo un error al registrarte\\. Intentá de nuevo con /suscribir",
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=kb_volver(),
-        )
+        rows = conn.execute(f"""
+            SELECT producto, AVG(precio) AS avg_p, MIN(precio) AS min_p
+            FROM estaciones
+            WHERE {precio_filter} AND {fecha_filter}
+            GROUP BY producto HAVING COUNT(*) >= 10
+            ORDER BY producto
+        """).fetchall()
+    conn.close()
 
-    return ConversationHandler.END
+    result = {}
+    for r in rows:
+        lbl = prod_label(r["producto"])
+        if lbl == "?":
+            continue
+        if lbl not in result or result[lbl]["avg"] > r["avg_p"]:
+            result[lbl] = {"avg": round(r["avg_p"], 1), "min": round(r["min_p"], 1)}
+    return result
 
-async def saltar_zona(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    chat_id  = update.effective_user.id
-    contacto = context.user_data.get("contacto", "")
-    es_email  = context.user_data.get("es_email", False)
 
-    ok = await post_lead(
-        mail    = contacto if es_email else "",
-        celular = contacto if not es_email else "",
-        zona    = "",
-        chat_id = chat_id,
+def estaciones_baratas(provincia: str = None, producto_kw: str = "super",
+                       top: int = 5) -> list:
+    """Retorna las N estaciones más baratas para un producto (datos recientes)."""
+    conn = _conn()
+    fecha_filter = "fecha_vigencia >= datetime((SELECT MAX(fecha_vigencia) FROM estaciones), '-72 hours')"
+    q = f"""
+        SELECT empresa, bandera, direccion, localidad, provincia, producto, precio
+        FROM estaciones
+        WHERE precio >= 1000 AND {fecha_filter} AND LOWER(producto) LIKE ?
+    """
+    params = [f"%{producto_kw.lower()}%"]
+    if provincia:
+        q += " AND UPPER(provincia) = ?"
+        params.append(provincia.upper())
+    q += " ORDER BY precio ASC LIMIT ?"
+    params.append(top)
+    rows = conn.execute(q, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def provincias_disponibles() -> list:
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT DISTINCT provincia FROM estaciones WHERE provincia IS NOT NULL ORDER BY provincia"
+    ).fetchall()
+    conn.close()
+    return [r["provincia"] for r in rows]
+
+
+def db_stats() -> dict:
+    """Estadísticas rápidas de la DB para /status."""
+    conn = _conn()
+    total = conn.execute("SELECT COUNT(*) FROM estaciones").fetchone()[0]
+    recientes = conn.execute("""
+        SELECT COUNT(*) FROM estaciones
+        WHERE fecha_vigencia >= datetime((SELECT MAX(fecha_vigencia) FROM estaciones), '-72 hours')
+    """).fetchone()[0]
+    max_fecha = conn.execute("SELECT MAX(fecha_vigencia) FROM estaciones").fetchone()[0]
+    subs = conn.execute("SELECT COUNT(*) FROM telegram_subscribers WHERE activo=1").fetchone()[0]
+    conn.close()
+    return {"total": total, "recientes": recientes, "max_fecha": max_fecha, "subs": subs}
+
+
+# ── Handlers ─────────────────────────────────────────────────────────────────
+def handle_start(chat_id: int, username: str, first_name: str):
+    save_subscriber(chat_id, username, first_name)
+    nombre = first_name or "ahí"
+    msg = (
+        f"⛽ *¡Hola {nombre}! Soy Tankear* 🇦🇷\n\n"
+        "Te ayudo a encontrar el combustible más barato y a estar al tanto de los cambios de precio.\n\n"
+        "*¿Qué puedo hacer por vos?*\n\n"
+        "📊 /precios — Precios actuales por provincia\n"
+        "💰 /barata — Estaciones más baratas\n"
+        "🔔 /alerta — Creá una alerta de precio\n"
+        "📋 /misalertas — Tus alertas activas\n"
+        "📍 /suscribir — Recibí actualizaciones diarias\n"
+        f"❓ /ayuda — Todos los comandos\n\n"
+        f"[Ver mapa completo →]({SITIO})"
     )
-
-    # Guardar en SQLite (sin zona aún)
-    if _DB_OK:
-        try:
-            user = update.effective_user
-            db.save_telegram_subscriber(
-                chat_id    = chat_id,
-                username   = user.username or "",
-                first_name = user.first_name or "",
-                contacto   = contacto,
-            )
-        except Exception as e:
-            logger.warning(f"save_subscriber error: {e}")
-
-    msg = "✅ *¡Listo\\!* Suscripto a alertas de Tankear\\." if ok else "⚠️ Error al registrarte\\. Intentá con /suscribir"
-    await update.message.reply_text(
-        msg,
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=kb_menu_principal(),
-    )
-    return ConversationHandler.END
-
-async def cancelar_suscripcion(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text(
-        "Cancelado\\. Usá /suscribir cuando quieras\\.  ¡Hasta pronto\\! 🚗",
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=kb_menu_principal(),
-    )
-    return ConversationHandler.END
-
-# ── Callback query handler (botones inline) ────────────────────────────────────
-
-async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int | None:
-    query = update.callback_query
-    await query.answer()
-
-    data = query.data
-
-    if data == "menu":
-        await query.message.edit_text(
-            BIENVENIDA,
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=kb_menu_principal(),
-        )
-    elif data == "precios":
-        await cmd_precios(update, context)
-    elif data == "dolar":
-        await cmd_dolar(update, context)
-    elif data == "cotizar":
-        await cmd_cotizar(update, context)
-    elif data == "suscribir":
-        return await cmd_suscribir(update, context)
-    elif data.startswith("cancel_alert_"):
-        alert_id = int(data.split("_")[-1])
-        if _DB_OK:
-            db.cancel_alert(alert_id, query.from_user.id)
-        await query.answer("Alerta cancelada ✓")
-        await cmd_misalertas(update, context)
-        return None
-
-    return None
-
-# ── /barata — estación más barata cerca ──────────────────────────────────────
-
-async def cmd_barata(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user  = update.effective_user
-    chat_id = user.id
-    args  = context.args or []
-    zona  = " ".join(args).strip() if args else ""
-
-    # Intentar obtener zona del perfil guardado
-    if not zona and _DB_OK:
-        subs = [s for s in db.get_telegram_subscribers() if s["chat_id"] == chat_id]
-        if subs and subs[0].get("provincia"):
-            zona = subs[0]["provincia"]
-
-    await update.message.reply_text("🔍 Buscando la estación más barata\\.\\.\\.".replace("...", "\\.\\.\\."),
-                                     parse_mode=ParseMode.MARKDOWN_V2)
-    try:
-        from datetime import timedelta
-        fecha_desde = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
-        params = {"limit": 500, "fecha_desde": fecha_desde}
-        if zona:
-            params["provincia"] = zona.upper()
-        async with httpx.AsyncClient(timeout=15) as client:
-            r = await client.get(f"{API_BASE}/precios", params=params)
-            data = r.json()
-        estaciones = data.get("estaciones", []) if isinstance(data, dict) else data
-        # Filtrar precios claramente desactualizados (< $500/L son históricos)
-        estaciones = [e for e in estaciones if e.get("precio") and float(e.get("precio", 0)) >= 500]
-        if not estaciones:
-            await update.message.reply_text("No encontré estaciones\\. Probá con `/barata Buenos Aires`",
-                                             parse_mode=ParseMode.MARKDOWN_V2)
-            return
-
-        # Agrupar por producto y encontrar la más barata
-        from collections import defaultdict
-        por_producto = defaultdict(list)
-        for e in estaciones:
-            prod = e.get("producto", "")
-            precio = e.get("precio")
-            if precio and float(precio) > 500:  # filtrar datos históricos
-                por_producto[prod].append(e)
-
-        lineas = [f"⛽ *Más baratas en {escape_md(zona or 'Argentina')}*\n"]
-        for prod, lista in sorted(por_producto.items()):
-            lista.sort(key=lambda x: float(x.get("precio", 9999)))
-            mejor = lista[0]
-            precio = float(mejor["precio"])
-            empresa = mejor.get("empresa", mejor.get("bandera", "?"))
-            localidad = mejor.get("localidad", "")
-            lineas.append(
-                f"*{escape_md(prod)}*\n"
-                f"  {escape_md(empresa)} — {escape_md(localidad)}\n"
-                f"  💰 `{fmt_precio(precio)}/L`"
-            )
-        lineas.append(f"\n[Ver todas en Tankear](https://tankear\\.com\\.ar)")
-        await update.message.reply_text("\n".join(lineas),
-                                         parse_mode=ParseMode.MARKDOWN_V2,
-                                         reply_markup=kb_menu_principal())
-    except Exception as e:
-        logger.warning(f"cmd_barata error: {e}")
-        await update.message.reply_text("Error al buscar\\. Intentá de nuevo en un momento\\.",
-                                         parse_mode=ParseMode.MARKDOWN_V2)
+    send(chat_id, msg)
 
 
-# ── /viaje — calculadora de ruta ──────────────────────────────────────────────
+def handle_precios(chat_id: int, args: list, sub: dict):
+    if args:
+        prov = norm_prov(" ".join(args))
+    elif sub.get("provincia"):
+        prov = sub["provincia"]
+    else:
+        prov = None
 
-async def cmd_viaje(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    args = context.args or []
-    if len(args) < 2:
-        await update.message.reply_text(
-            "🗺️ *Calculadora de viaje*\n\n"
-            "Uso: `/viaje [origen] [destino]`\n"
-            "Ejemplo: `/viaje Buenos\\_Aires Córdoba`\n\n"
-            "También podés usar: `/viaje BuenosAires Mendoza`",
-            parse_mode=ParseMode.MARKDOWN_V2,
-        )
+    precios = precios_provincia(prov)
+    if not precios:
+        prov_txt = prov.title() if prov else "el país"
+        send(chat_id, f"⚠️ No encontré precios para *{prov_txt}*. Probá con otra provincia.")
         return
 
-    # Separar origen y destino: si hay más de 2 args, el último es destino
-    mid = len(args) // 2
-    origen  = " ".join(args[:mid]) if len(args) > 2 else args[0]
-    destino = " ".join(args[mid:]) if len(args) > 2 else args[1]
-    origen  = origen.replace("_", " ")
-    destino = destino.replace("_", " ")
+    prov_txt = prov.title() if prov else "Promedio nacional"
+    lineas = [f"⛽ *Precios — {prov_txt}*\n"]
+    for lbl in ["Nafta Súper", "Nafta Premium", "Gasoil G2", "Gasoil G3", "GNC"]:
+        if lbl in precios:
+            p = precios[lbl]
+            lineas.append(f"• *{lbl}*: ${p['avg']:.0f}/L  _(mín ${p['min']:.0f})_")
 
-    await update.message.reply_text(
-        f"🗺️ Calculando viaje *{escape_md(origen)}* → *{escape_md(destino)}*\\.\\.\\.",
-        parse_mode=ParseMode.MARKDOWN_V2,
-    )
+    lineas.append(f"\n[Ver mapa →]({SITIO})")
+    send(chat_id, "\n".join(lineas))
 
-    try:
-        # 1. Geocodificar con Nominatim (secuencial para respetar rate limit)
-        async with httpx.AsyncClient(timeout=12, headers={"User-Agent": "Tankear/3.0"}) as client:
-            r_or = await client.get("https://nominatim.openstreetmap.org/search",
-                params={"q": f"{origen}, Argentina", "format": "json", "limit": 1,
-                        "countrycodes": "ar"})
-            await asyncio.sleep(1.1)  # rate limit Nominatim: 1 req/s
-            r_dst = await client.get("https://nominatim.openstreetmap.org/search",
-                params={"q": f"{destino}, Argentina", "format": "json", "limit": 1,
-                        "countrycodes": "ar"})
-            geo_or  = r_or.json()
-            geo_dst = r_dst.json()
 
-        if not geo_or or not geo_dst:
-            await update.message.reply_text(
-                "No pude ubicar origen o destino\\. "
-                "Probá con nombres más específicos \\(ej: `/viaje BuenosAires Cordoba`\\)\\.",
-                parse_mode=ParseMode.MARKDOWN_V2)
-            return
+def handle_barata(chat_id: int, args: list, sub: dict):
+    producto_kw = "super"
+    prov = None
 
-        lat1, lon1 = float(geo_or[0]["lat"]),  float(geo_or[0]["lon"])
-        lat2, lon2 = float(geo_dst[0]["lat"]), float(geo_dst[0]["lon"])
-
-        # 2. Distancia por ruta via OSRM (el mismo motor que usa la web)
-        dist_ruta = None
-        dur_min   = None
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                osrm = await client.get(
-                    f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}",
-                    params={"overview": "false"})
-                osrm_data = osrm.json()
-            if osrm_data.get("code") == "Ok":
-                route    = osrm_data["routes"][0]
-                dist_ruta = round(route["distance"] / 1000)   # metros → km
-                dur_min   = round(route["duration"] / 60)      # seg → min
-        except Exception as oe:
-            logger.debug(f"OSRM error: {oe}")
-
-        # Fallback haversine si OSRM falla
-        if not dist_ruta:
-            import math
-            R = 6371
-            dlat = math.radians(lat2 - lat1)
-            dlon = math.radians(lon2 - lon1)
-            a = math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
-            dist_ruta = round(R * 2 * math.asin(math.sqrt(a)) * 1.25)
-
-        # 3. Precio súper en provincia de origen
-        prov_origen = ""
-        display = geo_or[0].get("display_name", "")
-        for part in display.split(","):
-            part = part.strip()
-            if any(p in part.upper() for p in ["AIRES", "CÓRDOBA", "CORDOBA", "SANTA FE",
-                                                 "MENDOZA", "TUCUMÁN", "SALTA", "JUJUY",
-                                                 "ENTRE RÍOS", "CORRIENTES", "MISIONES"]):
-                prov_origen = part
+    if args:
+        txt = " ".join(args).lower()
+        for kw, lbl in [("premium", "premium"), ("gasoil", "grado"), ("gnc", "gnc"),
+                         ("g2", "grado 2"), ("g3", "grado 3"), ("super", "super"),
+                         ("súper", "super")]:
+            if kw in txt:
+                producto_kw = lbl
+                txt = txt.replace(kw, "").strip()
                 break
+        if txt:
+            prov = norm_prov(txt)
 
-        stats = await get_estadisticas(provincia=prov_origen or "BUENOS AIRES")
-        precio_super = None
-        if stats:
-            for p in stats.get("por_producto", []):
-                prod_name = p.get("producto", "")
-                if "92" in prod_name or "súper" in prod_name.lower() or "super" in prod_name.lower():
-                    precio_super = p.get("precio_promedio")
-                    break
+    if not prov and sub.get("provincia"):
+        prov = sub["provincia"]
 
-        CONSUMO = 10.0
-        litros  = round(dist_ruta * CONSUMO / 100, 1)
-        costo   = round(litros * precio_super) if precio_super else None
+    estaciones = estaciones_baratas(prov, producto_kw, top=5)
+    if not estaciones:
+        prov_txt = prov.title() if prov else "el país"
+        send(chat_id, f"⚠️ No encontré estaciones con ese combustible en *{prov_txt}*.")
+        return
 
-        dur_txt = ""
-        if dur_min:
-            hh, mm = divmod(dur_min, 60)
-            dur_txt = f" · `{hh}h {mm:02d}min`" if hh else f" · `{mm}min`"
+    prod_label_txt = prod_label(estaciones[0]["producto"])
+    prov_txt = prov.title() if prov else "todo el país"
+    lineas = [f"💰 *{prod_label_txt} más barata — {prov_txt}*\n"]
+    for i, e in enumerate(estaciones, 1):
+        empresa = (e.get("bandera") or e.get("empresa") or "?").title()
+        dir_txt = (e.get("direccion") or "").title()
+        loc_txt = (e.get("localidad") or "").title()
+        lineas.append(f"{i}. *{empresa}* — ${e['precio']:.0f}/L\n   📍 {dir_txt}, {loc_txt}")
 
-        lineas = [
-            f"🗺️ *{escape_md(origen.title())}* → *{escape_md(destino.title())}*\n",
-            f"📏 Distancia por ruta: `{dist_ruta} km`{dur_txt}",
-            f"⛽ Consumo \\(10L/100km\\): `{litros} L`",
-        ]
-        if costo and precio_super:
-            lineas.append(f"💰 Costo nafta súper: `{fmt_precio(costo)}`")
-            lineas.append(f"   _\\({fmt_precio(precio_super)}/L en {escape_md(prov_origen or 'Buenos Aires')}\\)_")
-        lineas.append(f"\n[Calculadora completa en Tankear](https://tankear\\.com\\.ar/viaje)")
-
-        await update.message.reply_text("\n".join(lineas),
-                                         parse_mode=ParseMode.MARKDOWN_V2,
-                                         reply_markup=kb_menu_principal())
-    except Exception as e:
-        logger.warning(f"cmd_viaje error: {e}")
-        await update.message.reply_text(
-            "No pude calcular el viaje\\. Intentá de nuevo\\.",
-            parse_mode=ParseMode.MARKDOWN_V2)
+    lineas.append(f"\n[Ver todas →]({SITIO})")
+    send(chat_id, "\n".join(lineas))
 
 
-# ── /alerta — alertas personalizadas de precio ───────────────────────────────
+def handle_alerta(chat_id: int, username: str, args: list):
+    if len(args) < 2:
+        send(chat_id,
+             "📋 *Uso:* `/alerta producto precio_máximo [provincia]`\n\n"
+             "*Ejemplos:*\n"
+             "`/alerta super 1400`\n"
+             "`/alerta premium 1600 Córdoba`\n"
+             "`/alerta gnc 300`\n\n"
+             "Te aviso cuando el precio baje de ese valor.")
+        return
 
-async def cmd_alerta(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    args = context.args or []
-    # Uso rápido: /alerta super 1400 BuenosAires
-    if len(args) >= 2:
-        prod_raw  = args[0].lower()
-        try:
-            precio_max = float(args[1].replace("$", "").replace(".", "").replace(",", "."))
-        except ValueError:
-            precio_max = None
-        provincia = " ".join(args[2:]).replace("_", " ") if len(args) > 2 else ""
-        producto  = PRODUCTOS_NORM.get(prod_raw, prod_raw.title())
-
-        if precio_max and _DB_OK:
-            user = update.effective_user
-            db.create_alert(user.id, user.username or "", producto, precio_max, provincia)
-            await update.message.reply_text(
-                f"🔔 *Alerta creada\\!*\n\n"
-                f"Te aviso cuando *{escape_md(producto)}* baje de "
-                f"`{fmt_precio(precio_max)}/L`"
-                f"{f' en {escape_md(provincia)}' if provincia else ''}\\.",
-                parse_mode=ParseMode.MARKDOWN_V2,
-                reply_markup=kb_menu_principal(),
-            )
-            return ConversationHandler.END
-
-    # Modo conversacional
-    await update.message.reply_text(
-        "🔔 *Nueva alerta de precio*\n\n"
-        "¿Para qué *producto* querés la alerta?\n\n"
-        "• súper\n• premium\n• gasoil\n• gnc\n\nEscribí el nombre:",
-        parse_mode=ParseMode.MARKDOWN_V2,
-    )
-    return ALERTA_PRODUCTO
-
-
-async def alerta_recibir_producto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    prod_raw = update.message.text.strip().lower()
-    producto = PRODUCTOS_NORM.get(prod_raw, update.message.text.strip().title())
-    context.user_data["alerta_producto"] = producto
-    await update.message.reply_text(
-        f"✓ Producto: *{escape_md(producto)}*\n\n"
-        f"¿A qué precio máximo querés la alerta? \\(ej: `1400`\\)",
-        parse_mode=ParseMode.MARKDOWN_V2,
-    )
-    return ALERTA_PRECIO
-
-
-async def alerta_recibir_precio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    prod_raw = args[0].lower()
     try:
-        precio = float(update.message.text.strip().replace("$", "").replace(".", "").replace(",", "."))
+        precio_max = float(args[1].replace(",", ".").replace("$", ""))
     except ValueError:
-        await update.message.reply_text("Escribí solo el número, ej: `1400`", parse_mode=ParseMode.MARKDOWN_V2)
-        return ALERTA_PRECIO
-    context.user_data["alerta_precio"] = precio
-    await update.message.reply_text(
-        f"✓ Precio: *{fmt_precio(precio)}/L*\n\n"
-        f"¿En qué provincia? \\(ej: Buenos Aires\\) o /saltar para todas:",
-        parse_mode=ParseMode.MARKDOWN_V2,
-    )
-    return ALERTA_PROVINCIA
-
-
-async def alerta_recibir_provincia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    provincia = update.message.text.strip()
-    return await _guardar_alerta(update, context, provincia)
-
-
-async def alerta_saltar_provincia(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    return await _guardar_alerta(update, context, "")
-
-
-async def _guardar_alerta(update: Update, context: ContextTypes.DEFAULT_TYPE, provincia: str) -> int:
-    user     = update.effective_user
-    producto = context.user_data.get("alerta_producto", "Nafta (súper)")
-    precio   = context.user_data.get("alerta_precio", 0)
-    if _DB_OK:
-        db.create_alert(user.id, user.username or "", producto, precio, provincia)
-    await update.message.reply_text(
-        f"✅ *Alerta guardada\\!*\n\n"
-        f"⛽ {escape_md(producto)}\n"
-        f"💰 Precio umbral: `{fmt_precio(precio)}/L`\n"
-        f"📍 {escape_md(provincia) if provincia else 'Todo el país'}\n\n"
-        f"Te aviso cuando el precio baje de ese valor\\.",
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=kb_menu_principal(),
-    )
-    return ConversationHandler.END
-
-
-# ── /misalertas — ver y cancelar alertas ────────────────────────────────────
-
-async def cmd_misalertas(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if not _DB_OK:
-        await update.message.reply_text("Servicio no disponible\\.", parse_mode=ParseMode.MARKDOWN_V2)
-        return
-    chat_id = update.effective_user.id
-    alertas = db.get_alerts_for_user(chat_id)
-    if not alertas:
-        await update.message.reply_text(
-            "No tenés alertas activas\\.\n\nUsá /alerta para crear una\\.",
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=kb_menu_principal(),
-        )
+        send(chat_id, "⚠️ El precio tiene que ser un número, ej: `1400`")
         return
 
-    botones = []
-    lineas  = ["🔔 *Tus alertas activas:*\n"]
-    for a in alertas:
-        prov = f" \\({escape_md(a['provincia'])}\\)" if a.get("provincia") else ""
+    prov = norm_prov(" ".join(args[2:])) if len(args) > 2 else ""
+
+    prod_label_txt = None
+    for kw, lbl in PROD_CANONICAL:
+        if kw in prod_raw:
+            prod_label_txt = lbl
+            break
+    if not prod_label_txt:
+        prod_label_txt = prod_raw.title()
+
+    aid = create_alert(chat_id, username, prod_label_txt, precio_max, prov)
+    prov_txt = f" en *{prov.title()}*" if prov else " (todo el país)"
+    send(chat_id,
+         f"🔔 *Alerta creada* (#{aid})\n\n"
+         f"Te aviso cuando *{prod_label_txt}*{prov_txt} "
+         f"baje de *${precio_max:.0f}/L*.")
+
+
+def handle_misalertas(chat_id: int):
+    alerts = get_alerts(chat_id)
+    if not alerts:
+        send(chat_id,
+             "📋 No tenés alertas activas.\n\n"
+             "Creá una con `/alerta super 1400`")
+        return
+
+    lineas = ["📋 *Tus alertas activas:*\n"]
+    for a in alerts:
+        prov_txt = f" ({a['provincia'].title()})" if a.get("provincia") else ""
         lineas.append(
-            f"*{escape_md(a['producto'])}*{prov}\n"
-            f"  Avisame si baja de `{fmt_precio(a['precio_max'])}/L`"
+            f"🔔 *#{a['id']}* — {a['producto']}{prov_txt}: max ${a['precio_max']:.0f}/L"
         )
-        botones.append([InlineKeyboardButton(
-            f"❌ Cancelar: {a['producto'][:20]}",
-            callback_data=f"cancel_alert_{a['id']}"
-        )])
 
-    botones.append([InlineKeyboardButton("↩️ Menú", callback_data="menu")])
-    await update.message.reply_text(
-        "\n".join(lineas),
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=InlineKeyboardMarkup(botones),
-    )
+    lineas.append("\nPara cancelar: `/cancelar_alerta 3` (con el número)")
+    send(chat_id, "\n".join(lineas))
 
 
-# ── /resumen — resumen semanal de precios ────────────────────────────────────
-
-async def cmd_resumen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    args = context.args or []
-    zona = " ".join(args).strip() if args else ""
-
-    if not zona and _DB_OK:
-        chat_id = update.effective_user.id
-        subs = [s for s in db.get_telegram_subscribers() if s["chat_id"] == chat_id]
-        if subs and subs[0].get("provincia"):
-            zona = subs[0]["provincia"]
-
-    provincia = zona.upper() if zona else "BUENOS AIRES"
-    stats = await get_estadisticas(provincia=provincia)
-    if not stats or not stats.get("por_producto"):
-        await update.message.reply_text(
-            "No pude obtener el resumen\\. Intentá de nuevo\\.",
-            parse_mode=ParseMode.MARKDOWN_V2)
+def handle_cancelar_alerta(chat_id: int, args: list):
+    if not args:
+        send(chat_id, "Indicá el número de alerta. Ej: `/cancelar_alerta 3`\nVer tus alertas: /misalertas")
         return
-
-    from datetime import date
-    hoy = date.today().strftime("%d/%m/%Y")
-    lineas = [f"📊 *Resumen de precios — {escape_md(provincia)}*\n_{escape_md(hoy)}_\n"]
-
-    LABELS = {
-        "Nafta (súper) entre 92 y 95 Ron":  "⛽ Súper 92",
-        "Nafta (premium) de más de 95 Ron": "🔵 Premium 95+",
-        "Gas Oil Grado 2":                  "🟤 Gasoil G2",
-        "Gas Oil Grado 3":                  "🟤 Gasoil G3",
-        "GNC":                              "🟢 GNC",
-    }
-    for p in stats["por_producto"]:
-        prod  = p.get("producto", "")
-        prom  = p.get("precio_promedio")   # clave correcta de la API
-        mini  = p.get("precio_min")
-        maxi  = p.get("precio_max")
-        n     = p.get("count_estaciones", "")
-        if not prom:
-            continue
-        label = LABELS.get(prod, escape_md(prod[:24]))
-        lineas.append(
-            f"*{label}*\n"
-            f"  Promedio: `{fmt_precio(prom)}/L`\n"
-            f"  Rango: `{fmt_precio(mini)}` — `{fmt_precio(maxi)}/L`"
-            + (f" \\({n} est\\.\\)" if n else "")
-        )
-
-    ultima = stats.get("ultima_actualizacion", "")
-    if ultima:
-        lineas.append(f"\n_Actualizado: {escape_md(str(ultima)[:10])}_")
-    lineas.append(f"\n[Ver más en Tankear](https://tankear\\.com\\.ar)")
-
-    await update.message.reply_text(
-        "\n".join(lineas),
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=kb_menu_principal(),
-    )
-
-
-# ── /reportar — reportar precio en estación ──────────────────────────────────
-
-async def cmd_reportar(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await update.message.reply_text(
-        "📝 *Reportar precio en una estación*\n\n"
-        "¿En qué *empresa/marca* viste el precio? \\(ej: YPF, Shell, Axion\\)",
-        parse_mode=ParseMode.MARKDOWN_V2,
-    )
-    return REPORTAR_EMPRESA
-
-
-async def reportar_empresa(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data["rep_empresa"] = update.message.text.strip().upper()
-    await update.message.reply_text(
-        f"✓ Empresa: *{escape_md(context.user_data['rep_empresa'])}*\n\n"
-        f"¿Qué *producto* viste? \\(súper, premium, gasoil, gnc\\)",
-        parse_mode=ParseMode.MARKDOWN_V2,
-    )
-    return REPORTAR_PRODUCTO
-
-
-async def reportar_producto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    prod_raw = update.message.text.strip().lower()
-    context.user_data["rep_producto"] = PRODUCTOS_NORM.get(prod_raw, update.message.text.strip().title())
-    await update.message.reply_text(
-        f"✓ Producto: *{escape_md(context.user_data['rep_producto'])}*\n\n"
-        f"¿Cuál era el *precio*? \\(ej: 1580\\)",
-        parse_mode=ParseMode.MARKDOWN_V2,
-    )
-    return REPORTAR_PRECIO
-
-
-async def reportar_precio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
-        precio = float(update.message.text.strip().replace("$", "").replace(".", "").replace(",", "."))
+        aid = int(args[0])
     except ValueError:
-        await update.message.reply_text("Escribí solo el número, ej: `1580`", parse_mode=ParseMode.MARKDOWN_V2)
-        return REPORTAR_PRECIO
-
-    user    = update.effective_user
-    empresa = context.user_data.get("rep_empresa", "?")
-    producto = context.user_data.get("rep_producto", "?")
-
-    if _DB_OK:
-        db.log_telegram_message(
-            chat_id    = user.id,
-            username   = user.username or "",
-            first_name = user.first_name or "",
-            text       = f"REPORTE: {empresa} | {producto} | ${precio}",
-            intencion  = "reporte_precio",
-            score_lead = 0,
-        )
-
-    await update.message.reply_text(
-        f"✅ *¡Gracias por reportar\\!*\n\n"
-        f"🏪 {escape_md(empresa)}\n"
-        f"⛽ {escape_md(producto)}\n"
-        f"💰 `{fmt_precio(precio)}/L`\n\n"
-        f"Tu reporte ayuda a toda la comunidad Tankear 🚗",
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=kb_menu_principal(),
-    )
-    return ConversationHandler.END
-
-
-# ── Fallback: mensajes de texto fuera de conversación ─────────────────────────
-
-def _detectar_intencion(txt: str) -> tuple[str, int]:
-    """Devuelve (intencion, score_lead). Score >= 2 = hot lead."""
-    t = txt.lower()
-    if any(w in t for w in ["seguro", "cotizar", "cotizador", "póliza", "poliza", "cobertura", "aseguradora"]):
-        return "seguro", 3
-    if any(w in t for w in ["nafta", "súper", "super 95", "infinia", "v-power", "combustible"]):
-        return "nafta", 1
-    if any(w in t for w in ["gasoil", "diesel", "gasoleo", "gas oil"]):
-        return "gasoil", 1
-    if any(w in t for w in ["gnc", "gas natural"]):
-        return "gnc", 1
-    if any(w in t for w in ["precio", "cuánto", "cuanto", "cuesta"]):
-        return "precio", 1
-    if any(w in t for w in ["dolar", "dólar", "blue", "cambio", "divisa"]):
-        return "dolar", 1
-    if any(w in t for w in ["viaje", "ruta", "kilómetro", "km", "consumo"]):
-        return "viaje", 2
-    return "otro", 0
-
-
-def _log_mensaje(update: Update, intencion: str, score: int):
-    """Loguea el mensaje en SQLite si la DB está disponible."""
-    if not _DB_OK:
+        send(chat_id, "⚠️ Indicá el número de alerta, ej: `/cancelar_alerta 3`")
         return
+
+    cancel_alert(aid, chat_id)
+    send(chat_id, f"✅ Alerta #{aid} cancelada.")
+
+
+def handle_suscribir(chat_id: int, username: str, first_name: str, args: list):
+    prov = norm_prov(" ".join(args)) if args else ""
+    save_subscriber(chat_id, username, first_name, provincia=prov)
+    prov_txt = f" para *{prov.title()}*" if prov else ""
+    send(chat_id,
+         f"✅ *¡Listo!* Quedaste suscripto{prov_txt}.\n\n"
+         "Cada mañana te mando un resumen de precios y te aviso si hay cambios importantes.\n\n"
+         "Para darte de baja: /baja")
+
+
+def handle_baja(chat_id: int):
+    unsub(chat_id)
+    send(chat_id,
+         "👋 *Baja procesada.*\n\n"
+         "Ya no vas a recibir actualizaciones automáticas.\n"
+         "Si querés volver: /suscribir")
+
+
+def handle_ayuda(chat_id: int):
+    send(chat_id,
+         "❓ *Comandos de Tankear*\n\n"
+         "⛽ `/precios` — Precios nacionales\n"
+         "⛽ `/precios Córdoba` — Precios de una provincia\n\n"
+         "💰 `/barata` — Nafta super más barata (zona guardada)\n"
+         "💰 `/barata premium BuenosAires` — Por producto y provincia\n\n"
+         "🔔 `/alerta super 1400` — Alerta cuando super baje de $1.400\n"
+         "🔔 `/alerta gnc 300 Mendoza` — Alerta en provincia específica\n"
+         "📋 `/misalertas` — Ver tus alertas activas\n"
+         "🗑️ `/cancelar_alerta 3` — Cancelar alerta #3\n\n"
+         "📍 `/suscribir` — Recibir actualizaciones diarias\n"
+         "📍 `/suscribir Tucumán` — Suscribirse con provincia\n"
+         "❌ `/baja` — Darse de baja\n\n"
+         f"[Ver mapa completo →]({SITIO})")
+
+
+def handle_scraper(chat_id: int):
+    """Lanza el scraper a demanda. Solo admin."""
+    if chat_id != ADMIN_ID:
+        send(chat_id, "⛔ Comando reservado para administradores.")
+        return
+
+    send(chat_id, "🚀 *Lanzando scraper...*\nEsperá unos minutos para el reporte.")
     try:
-        user = update.effective_user
-        db.log_telegram_message(
-            chat_id    = user.id,
-            username   = user.username or "",
-            first_name = user.first_name or "",
-            text       = update.message.text or "",
-            intencion  = intencion,
-            score_lead = score,
+        subprocess.Popen(
+            ["/var/www/tankear/api/notify_scraper.sh"],
+            stdout=open("/var/log/tankear-scraper.log", "a"),
+            stderr=subprocess.STDOUT,
         )
+        send(chat_id, "✅ *Scraper lanzado OK*\nEl reporte llega en unos minutos.")
     except Exception as e:
-        logger.debug(f"log_mensaje error: {e}")
+        send(chat_id, f"❌ *Error al lanzar scraper:*\n`{e}`")
 
 
-async def handle_texto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Si estamos esperando el año para cotizar
-    if context.user_data.get("cotizar_step") == "anio":
-        await cotizar_recibir_anio(update, context)
+def handle_status(chat_id: int):
+    """Estado del sistema. Solo admin."""
+    if chat_id != ADMIN_ID:
+        send(chat_id, "⛔ Comando reservado para administradores.")
         return
 
-    intencion, score = _detectar_intencion(update.message.text or "")
-    _log_mensaje(update, intencion, score)
+    try:
+        stats = db_stats()
+        msg = (
+            "🖥️ *Estado del sistema*\n\n"
+            f"📦 Estaciones en DB: `{stats['total']:,}`\n"
+            f"✅ Registros recientes (72h): `{stats['recientes']:,}`\n"
+            f"📅 Fecha más reciente: `{stats['max_fecha'] or 'N/A'}`\n"
+            f"👥 Suscriptores activos: `{stats['subs']}`\n\n"
+            f"🕐 Hora servidor: `{datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}`"
+        )
+        send(chat_id, msg)
+    except Exception as e:
+        send(chat_id, f"❌ Error obteniendo estado: `{e}`")
 
-    if intencion in ("nafta", "gasoil", "gnc", "precio"):
-        await cmd_precios(update, context)
-    elif intencion == "dolar":
-        await cmd_dolar(update, context)
-    elif intencion in ("seguro", "viaje"):
-        await cmd_cotizar(update, context)
+
+def handle_nlp(chat_id: int, text: str, username: str, first_name: str, sub: dict):
+    """Manejo básico de lenguaje natural."""
+    t = text.lower()
+
+    if any(w in t for w in ["precio", "cuánto", "cuanto", "nafta", "gasoil", "gnc", "combustible"]):
+        prov = None
+        for p in PROVINCIAS_VALIDAS:
+            if p in t:
+                prov = norm_prov(p)
+                break
+        handle_precios(chat_id, [prov] if prov else [], sub)
+        return "precios"
+
+    if any(w in t for w in ["barata", "barato", "económica", "economica", "más barata", "mas barata"]):
+        handle_barata(chat_id, [], sub)
+        return "barata"
+
+    if any(w in t for w in ["alerta", "avisame", "avisá", "notifica", "cuando baje"]):
+        send(chat_id,
+             "🔔 Para crear una alerta usá:\n"
+             "`/alerta super 1400`\n"
+             "`/alerta premium 1600 Córdoba`")
+        return "alerta_info"
+
+    if any(w in t for w in ["hola", "buenas", "buen dia", "buen día", "ola"]):
+        nombre = first_name or "ahí"
+        send(chat_id, f"¡Hola {nombre}! 👋 Escribí /ayuda para ver qué puedo hacer.")
+        return "saludo"
+
+    send(chat_id,
+         "No entendí bien 🤔\n\n"
+         "Probá con:\n"
+         "• /precios Buenos Aires\n"
+         "• /barata Córdoba\n"
+         "• /ayuda — para ver todos los comandos")
+    return "unknown"
+
+
+# ── Loop principal ────────────────────────────────────────────────────────────
+def process_update(update: dict):
+    msg = update.get("message") or update.get("edited_message")
+    if not msg:
+        return
+
+    chat_id    = msg["chat"]["id"]
+    text       = (msg.get("text") or "").strip()
+    username   = msg.get("from", {}).get("username", "")
+    first_name = msg.get("from", {}).get("first_name", "")
+
+    if not text:
+        return
+
+    log(f"@{username or chat_id}: {text[:80]}")
+
+    sub   = get_subscriber(chat_id)
+    parts = text.split()
+    cmd   = parts[0].lower().lstrip("/").split("@")[0]
+    args  = parts[1:]
+    intencion = cmd
+
+    if cmd == "start":
+        handle_start(chat_id, username, first_name)
+
+    elif cmd in ("precios", "precio"):
+        handle_precios(chat_id, args, sub)
+
+    elif cmd in ("barata", "baratas", "barato"):
+        handle_barata(chat_id, args, sub)
+
+    elif cmd == "alerta":
+        handle_alerta(chat_id, username, args)
+
+    elif cmd in ("misalertas", "alertas", "mis_alertas"):
+        handle_misalertas(chat_id)
+
+    elif cmd in ("cancelar_alerta", "borrararerta", "deleteralerta"):
+        handle_cancelar_alerta(chat_id, args)
+
+    elif cmd in ("suscribir", "suscribirme", "subscribe"):
+        handle_suscribir(chat_id, username, first_name, args)
+
+    elif cmd in ("baja", "desuscribir", "unsubscribe", "cancelar"):
+        handle_baja(chat_id)
+
+    elif cmd in ("ayuda", "help", "comandos"):
+        handle_ayuda(chat_id)
+
+    elif cmd == "scraper":
+        handle_scraper(chat_id)
+
+    elif cmd == "status":
+        handle_status(chat_id)
+
     else:
-        await update.message.reply_text(
-            "No entendí eso 🤔 Usá /ayuda para ver qué puedo hacer\\.",
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=kb_menu_principal(),
-        )
+        intencion = handle_nlp(chat_id, text, username, first_name, sub)
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+    log_msg(chat_id, username, first_name, text, intencion,
+            score=2 if intencion in ("precios", "barata", "alerta") else 1)
 
-async def post_init(app: Application) -> None:
-    """Registra los comandos visibles en el menú de Telegram."""
-    await app.bot.set_my_commands([
-        BotCommand("start",      "Inicio — menú principal"),
-        BotCommand("precios",    "Precios de nafta en tu zona"),
-        BotCommand("barata",     "Estación más barata cerca"),
-        BotCommand("resumen",    "Resumen de precios de la semana"),
-        BotCommand("viaje",      "Calculadora de viaje en auto"),
-        BotCommand("alerta",     "Alerta cuando baje un precio"),
-        BotCommand("misalertas", "Ver y cancelar tus alertas"),
-        BotCommand("reportar",   "Reportar un precio que viste"),
-        BotCommand("dolar",      "Dólar blue y oficial hoy"),
-        BotCommand("cotizar",    "Cotizá tu seguro de auto"),
-        BotCommand("suscribir",  "Suscripción a alertas de zona"),
-        BotCommand("ayuda",      "Ayuda y todos los comandos"),
-    ])
-    logger.info("Bot iniciado — @Tankear_bot")
 
-def main() -> None:
-    app = (
-        Application.builder()
-        .token(TOKEN)
-        .post_init(post_init)
-        .build()
-    )
+def main():
+    if not TG_TOKEN:
+        log("❌ TELEGRAM_BOT_TOKEN no configurado. Saliendo.")
+        return
 
-    # ConversationHandler para /suscribir
-    conv_suscribir = ConversationHandler(
-        entry_points=[
-            CommandHandler("suscribir", cmd_suscribir),
-            CallbackQueryHandler(handle_callback, pattern="^suscribir$"),
-        ],
-        states={
-            ESPERANDO_CONTACTO: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_contacto),
-            ],
-            ESPERANDO_ZONA: [
-                CommandHandler("saltar", saltar_zona),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_zona),
-            ],
-        },
-        fallbacks=[CommandHandler("cancelar", cancelar_suscripcion)],
-    )
+    me = api("getMe")
+    if not me.get("ok"):
+        log(f"❌ Token inválido: {me}")
+        return
+    bot_name = me["result"]["username"]
+    log(f"✅ Bot @{bot_name} iniciado — long polling")
 
-    # ConversationHandler para /alerta
-    conv_alerta = ConversationHandler(
-        entry_points=[CommandHandler("alerta", cmd_alerta)],
-        states={
-            ALERTA_PRODUCTO:  [MessageHandler(filters.TEXT & ~filters.COMMAND, alerta_recibir_producto)],
-            ALERTA_PRECIO:    [MessageHandler(filters.TEXT & ~filters.COMMAND, alerta_recibir_precio)],
-            ALERTA_PROVINCIA: [
-                CommandHandler("saltar", alerta_saltar_provincia),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, alerta_recibir_provincia),
-            ],
-        },
-        fallbacks=[CommandHandler("cancelar", cancelar_suscripcion)],
-    )
+    offset = 0
+    while True:
+        try:
+            updates = get_updates(offset=offset, timeout=30)
+            for upd in updates:
+                try:
+                    process_update(upd)
+                except Exception as e:
+                    log(f"Error procesando update {upd.get('update_id')}: {e}")
+                offset = upd["update_id"] + 1
+        except requests.exceptions.Timeout:
+            pass  # normal en long polling
+        except requests.exceptions.ConnectionError as e:
+            log(f"Conexión perdida: {e} — reintentando en 5s")
+            time.sleep(5)
+        except KeyboardInterrupt:
+            log("Interrumpido por usuario")
+            break
+        except Exception as e:
+            log(f"Error inesperado: {e} — reintentando en 10s")
+            time.sleep(10)
 
-    # ConversationHandler para /reportar
-    conv_reportar = ConversationHandler(
-        entry_points=[CommandHandler("reportar", cmd_reportar)],
-        states={
-            REPORTAR_EMPRESA:  [MessageHandler(filters.TEXT & ~filters.COMMAND, reportar_empresa)],
-            REPORTAR_PRODUCTO: [MessageHandler(filters.TEXT & ~filters.COMMAND, reportar_producto)],
-            REPORTAR_PRECIO:   [MessageHandler(filters.TEXT & ~filters.COMMAND, reportar_precio)],
-        },
-        fallbacks=[CommandHandler("cancelar", cancelar_suscripcion)],
-    )
-
-    # Registrar handlers
-    app.add_handler(CommandHandler("start",      cmd_start))
-    app.add_handler(CommandHandler("ayuda",      cmd_ayuda))
-    app.add_handler(CommandHandler("help",       cmd_ayuda))
-    app.add_handler(CommandHandler("dolar",      cmd_dolar))
-    app.add_handler(CommandHandler("precios",    cmd_precios))
-    app.add_handler(CommandHandler("barata",     cmd_barata))
-    app.add_handler(CommandHandler("viaje",      cmd_viaje))
-    app.add_handler(CommandHandler("resumen",    cmd_resumen))
-    app.add_handler(CommandHandler("misalertas", cmd_misalertas))
-    app.add_handler(CommandHandler("cotizar",    cmd_cotizar))
-    app.add_handler(conv_suscribir)
-    app.add_handler(conv_alerta)
-    app.add_handler(conv_reportar)
-    app.add_handler(CallbackQueryHandler(handle_callback))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_texto))
-
-    logger.info("Iniciando polling...")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == "__main__":
     main()
