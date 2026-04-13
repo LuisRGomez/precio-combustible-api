@@ -624,6 +624,26 @@ def main():
     bot_name = me["result"]["username"]
     log(f"✅ Bot @{bot_name} iniciado — long polling")
 
+    # ── Registrar comandos en Telegram (aparecen al escribir /) ──────────────
+    cmds_publicos = [
+        {"command": "start",   "description": "Bienvenida y ayuda"},
+        {"command": "nafta",   "description": "Nafta más barata cerca tuyo"},
+        {"command": "gasoil",  "description": "Gasoil más barato cerca tuyo"},
+        {"command": "precios", "description": "Precios por provincia"},
+        {"command": "mapa",    "description": "Ver mapa de estaciones"},
+        {"command": "ayuda",   "description": "Lista de comandos"},
+    ]
+    api("setMyCommands", json={"commands": cmds_publicos})
+    # Comandos admin: igual que público + scraper y status
+    api("setMyCommands", json={
+        "commands": cmds_publicos + [
+            {"command": "scraper", "description": "🔧 Lanzar scraper ahora"},
+            {"command": "status",  "description": "🔧 Estado de la base de datos"},
+        ],
+        "scope": {"type": "chat", "chat_id": ADMIN_ID},
+    })
+    log("✅ Comandos registrados en Telegram")
+
     offset = 0
     while True:
         try:
