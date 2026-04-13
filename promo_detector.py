@@ -148,6 +148,22 @@ def _get_text(msg: email.message.Message) -> str:
     return text
 
 
+def _get_html(msg: email.message.Message) -> str:
+    """Retorna el HTML crudo del mensaje (para extraer URLs de imágenes)."""
+    if msg.is_multipart():
+        for part in msg.walk():
+            if part.get_content_type() == "text/html":
+                payload = part.get_payload(decode=True)
+                if payload:
+                    return payload.decode(part.get_content_charset() or "utf-8", errors="replace")
+    else:
+        if msg.get_content_type() == "text/html":
+            payload = msg.get_payload(decode=True)
+            if payload:
+                return payload.decode(msg.get_content_charset() or "utf-8", errors="replace")
+    return ""
+
+
 def _es_promo_combustible(asunto: str, texto: str, remitente: str = "") -> bool:
     """
     Regla principal de detección:
@@ -512,9 +528,12 @@ def _marcar_procesado(mail_id: str, asunto: str, publicado: bool,
 # ── Imagen del mail ───────────────────────────────────────────────────────────
 def _extraer_imagen(msg: email.message.Message) -> bytes | None:
     """
-    Extrae la primera imagen inline o adjunta del mail (banner de la promo).
-    Preferencia: image/jpeg > image/png > image/gif
+    Extrae el banner principal de la promo.
+    1) Busca partes MIME image/* adjuntas/inline (>5KB)
+    2) Si no hay, busca URLs de imágenes en el HTML y descarga la más grande
+    Preferencia: jpeg > png > gif
     """
+    # ── 1. Imágenes MIME adjuntas ─────────────────────────────────────────────
     imagenes = []
     for part in msg.walk():
         ct = part.get_content_type()
@@ -522,13 +541,49 @@ def _extraer_imagen(msg: email.message.Message) -> bytes | None:
             data = part.get_payload(decode=True)
             if data and len(data) > 5000:  # descartar íconos tiny (<5KB)
                 imagenes.append((ct, data))
-    if not imagenes:
+    if imagenes:
+        for ct, data in imagenes:
+            if "jpeg" in ct or "png" in ct:
+                return data
+        return imagenes[0][1]
+
+    # ── 2. Fallback: imágenes referenciadas por URL en el HTML ───────────────
+    html = _get_html(msg)
+    if not html:
         return None
-    # Preferir jpeg/png sobre gif
-    for ct, data in imagenes:
-        if "jpeg" in ct or "png" in ct:
-            return data
-    return imagenes[0][1]
+
+    # Extraer todas las URLs de <img src="...">
+    urls = re.findall(r'<img[^>]+src=["\']([^"\']+)["\']', html, re.IGNORECASE)
+    # Filtrar URLs externas (http/https), descartar íconos/spacers por nombre
+    IGNORAR = ["spacer", "pixel", "blank", "tracking", "open", "logo",
+               "icon", "badge", "1x1", "clear.gif", "beacon"]
+    urls_filtradas = [
+        u for u in urls
+        if u.startswith("http") and not any(ig in u.lower() for ig in IGNORAR)
+    ]
+
+    if not urls_filtradas:
+        return None
+
+    import httpx as _httpx
+    # Descargar hasta las primeras 5 URLs, quedarnos con la más grande (probable banner)
+    mejor = None
+    mejor_size = 0
+    for url in urls_filtradas[:5]:
+        try:
+            r = _httpx.get(url, timeout=8, follow_redirects=True,
+                           headers={"User-Agent": "Mozilla/5.0"})
+            ct = r.headers.get("content-type", "")
+            if r.status_code == 200 and "image" in ct and len(r.content) > 10_000:
+                if len(r.content) > mejor_size:
+                    mejor_size = len(r.content)
+                    mejor = r.content
+        except Exception:
+            pass
+
+    if mejor:
+        log.info(f"  → Imagen descargada de URL ({mejor_size//1024}KB)")
+    return mejor
 
 
 # ── Telegram ──────────────────────────────────────────────────────────────────
