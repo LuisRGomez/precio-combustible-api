@@ -7,6 +7,7 @@ TG_TOKEN   = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 CANAL      = "@tankear_ar"
 UMBRAL_PC  = 1.5    # % mínimo para considerar "subida"
 PRECIO_MIN = 500.0  # filtro de outliers — nada por debajo de $500 es válido
+MAX_CAMBIO = 25.0   # % máximo creíble en un día — si supera esto es error de datos
 
 PROD_CANONICAL = [
     ("súper",   "Nafta Súper"),
@@ -41,6 +42,10 @@ def tg_send(chat_id, text, parse_mode="Markdown"):
     except Exception as e: log(f"TG error: {e}"); return False
 
 def snapshot_hoy():
+    """
+    Guarda snapshot del día usando SOLO registros con fecha_vigencia reciente (72h).
+    Así los snapshots futuros son comparables entre sí y no mezclan datos viejos.
+    """
     hoy = date.today().isoformat()
     c = _conn()
     ya = c.execute("SELECT COUNT(*) FROM precios_historico WHERE fecha_snapshot=?", (hoy,)).fetchone()[0]
@@ -48,7 +53,10 @@ def snapshot_hoy():
         c.close(); log(f"Snapshot {hoy} ya existe ({ya} registros)"); return 0
     rows = c.execute("""
         SELECT empresa, bandera, producto, precio, provincia, localidad, direccion, fecha_vigencia
-        FROM estaciones WHERE precio >= ?
+        FROM estaciones
+        WHERE precio >= ?
+          AND fecha_vigencia >= datetime(
+              (SELECT MAX(fecha_vigencia) FROM estaciones), '-72 hours')
     """, (PRECIO_MIN,)).fetchall()
     ins = 0
     for r in rows:
@@ -61,7 +69,7 @@ def snapshot_hoy():
             ins += 1
         except: pass
     c.commit(); c.close()
-    log(f"Snapshot {hoy}: {ins} registros (filtro >= ${PRECIO_MIN:.0f})")
+    log(f"Snapshot {hoy}: {ins} registros (72h recientes, >= ${PRECIO_MIN:.0f})")
     return ins
 
 def get_promedios_desde_estaciones() -> dict:
@@ -161,13 +169,18 @@ def main():
     else:
         log("Sin snapshots anteriores — primer día")
 
-    cambios = []; vistos = set()
+    cambios = []; vistos = set(); descartados = []
     for prod, ph in precios_hoy.items():
         pa = precios_ant.get(prod)
         if not pa or pa <= 0: continue
         lb = prod_label(prod)
         if lb in vistos or lb == "?": continue
         dp = (ph - pa) / pa * 100
+        # Filtro de calidad: cambios > MAX_CAMBIO% son casi siempre error de datos
+        if abs(dp) > MAX_CAMBIO:
+            log(f"  ⚠️  {lb}: {dp:+.1f}% supera el límite de {MAX_CAMBIO}% — descartado (datos históricos inconsistentes)")
+            descartados.append(lb)
+            continue
         if abs(dp) >= UMBRAL_PC:
             vistos.add(lb)
             cambios.append({"lbl": lb, "ph": ph, "pa": round(pa, 0), "dp": round(dp, 1)})

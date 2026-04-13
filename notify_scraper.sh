@@ -31,8 +31,9 @@ else
 fi
 
 # Extraer estadísticas del output
-REGISTROS=$(grep -oP 'guardadas?:?\s*\K[0-9]+' "$TMPOUT" | tail -1 || echo "?")
-ESTACIONES=$(grep -oP 'estaciones?:?\s*\K[0-9]+' "$TMPOUT" | tail -1 || echo "?")
+# "Estaciones guardadas: 36,705" — sacar número con comas
+REGISTROS=$(grep -oP 'guardadas?:\s*\K[\d,]+' "$TMPOUT" | tail -1 | tr -d ',' || echo "?")
+ESTACIONES="$REGISTROS"
 FIN=$(date '+%Y-%m-%d %H:%M:%S')
 
 if [ "$ESTADO" = "OK" ]; then

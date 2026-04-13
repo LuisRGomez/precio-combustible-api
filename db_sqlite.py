@@ -224,8 +224,9 @@ def save_estaciones(records: list) -> int:
              :latitud, :longitud, :producto, :precio, :tipohorario, :fecha_vigencia,
              datetime('now'))
     """, records)
-    n = conn.execute("SELECT changes()").fetchone()[0]
     conn.commit()
+    # Contar real — changes() solo devuelve el último INSERT del executemany
+    n = conn.execute("SELECT COUNT(*) FROM estaciones").fetchone()[0]
     conn.close()
     return n
 
