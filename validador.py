@@ -27,7 +27,7 @@ MIN_ESTACIONES  = 5_000    # mínimo de registros esperados
 MAX_EDAD_HORAS  = 96       # máximo de horas desde la fecha_vigencia más reciente
 MIN_PRECIO      = 1_000.0  # precio mínimo razonable (nafta/gasoil, $/L)
 MAX_PRECIO      = 10_000.0 # precio máximo razonable ($/L)
-MAX_CAMBIO_DIA  = 35.0     # % máximo de cambio diario creíble (Argentina puede tener ajustes grandes)
+MAX_CAMBIO_DIA  = 10.0     # % máximo de cambio diario creíble (ajustes típicos en AR son 4-5%)
 # GNC se vende por m³ y tiene precios menores a los líquidos — no aplicar MIN_PRECIO
 PRODUCTOS_SIN_MIN = {"GNC", "gnc"}
 # Días de "gracia" tras cambio de método de snapshot (evita falsos positivos el primer día)
