@@ -473,6 +473,91 @@ def handle_ayuda(chat_id: int):
          f"[Ver mapa completo →]({SITIO})")
 
 
+def handle_promos(chat_id: int):
+    """Muestra promos activas (no vencidas) detectadas por promo_detector."""
+    try:
+        import sqlite3 as _sqlite3
+        from datetime import datetime, date
+        import re as _re
+
+        con = _sqlite3.connect(DB_PATH)
+        con.row_factory = _sqlite3.Row
+        rows = con.execute("""
+            SELECT marca, tarjeta, descuento, vigencia, asunto, texto_msg, created_at
+            FROM telegram_promos
+            WHERE publicado = 1
+            ORDER BY created_at DESC
+            LIMIT 30
+        """).fetchall()
+        con.close()
+
+        if not rows:
+            send(chat_id, "🎫 No hay promos guardadas aún.")
+            return
+
+        hoy = date.today()
+
+        def _vencida(vigencia_str: str) -> bool:
+            """Intenta determinar si la promo ya venció."""
+            if not vigencia_str:
+                return False
+            # Buscar fecha con año: dd/mm/yyyy o dd-mm-yyyy
+            m = _re.search(r'(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})', vigencia_str)
+            if m:
+                d, mo, a = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                a = a if a > 100 else 2000 + a
+                try:
+                    return date(a, mo, d) < hoy
+                except Exception:
+                    return False
+            # Solo dd/mm sin año → asumir año actual
+            m2 = _re.search(r'(\d{1,2})[\/\-](\d{1,2})', vigencia_str)
+            if m2:
+                d, mo = int(m2.group(1)), int(m2.group(2))
+                try:
+                    fecha = date(hoy.year, mo, d)
+                    if fecha < date(hoy.year, 1, 15):
+                        fecha = date(hoy.year + 1, mo, d)
+                    return fecha < hoy
+                except Exception:
+                    return False
+            return False
+
+        activas = [r for r in rows if not _vencida(r["vigencia"])]
+
+        if not activas:
+            send(chat_id, "🎫 No hay promos activas en este momento.")
+            return
+
+        lineas = ["🎫 *Promos activas*\n"]
+        for r in activas[:8]:  # máx 8 para no superar límite Telegram
+            marca   = r["marca"] or ""
+            tarjeta = r["tarjeta"] or ""
+            desc    = r["descuento"] or ""
+            vig     = r["vigencia"] or ""
+            asunto  = r["asunto"] or ""
+
+            def e(s): return _re.sub(r'([_\*\[\]\(\)~`>#+\-=|{}\.!\\])', r'\\\1', str(s))
+
+            # Línea de título
+            if desc:
+                titulo = f"*{e(desc)} de reintegro*"
+                if marca: titulo += f" en *{e(marca)}*"
+                if tarjeta and tarjeta.upper() != marca.upper(): titulo += f" con *{e(tarjeta)}*"
+            else:
+                titulo = f"*{e(asunto[:55])}*" if asunto else f"*{e(marca or tarjeta)}*"
+
+            linea = f"⛽ {titulo}"
+            if vig:
+                linea += f"\n   📅 _{e(vig)}_"
+            lineas.append(linea)
+
+        send(chat_id, "\n\n".join(lineas))
+
+    except Exception as ex:
+        send(chat_id, f"❌ Error al obtener promos: {ex}")
+
+
 def handle_scraper(chat_id: int):
     """Lanza el scraper a demanda. Solo admin."""
     if chat_id != ADMIN_ID:
@@ -605,6 +690,9 @@ def process_update(update: dict):
     elif cmd == "status":
         handle_status(chat_id)
 
+    elif cmd == "promos":
+        handle_promos(chat_id)
+
     else:
         intencion = handle_nlp(chat_id, text, username, first_name, sub)
 
@@ -630,6 +718,7 @@ def main():
         {"command": "nafta",   "description": "Nafta más barata cerca tuyo"},
         {"command": "gasoil",  "description": "Gasoil más barato cerca tuyo"},
         {"command": "precios", "description": "Precios por provincia"},
+        {"command": "promos",  "description": "Promociones activas de combustible"},
         {"command": "mapa",    "description": "Ver mapa de estaciones"},
         {"command": "ayuda",   "description": "Lista de comandos"},
     ]

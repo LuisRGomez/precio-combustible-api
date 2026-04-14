@@ -254,8 +254,8 @@ def main():
     log(f"Total items: {len(todas)}")
 
     # Filtrar por puntaje mínimo y no enviadas
-    candidatas = [n for n in todas if n["puntaje"] >= 3 and not ya_enviada(n["url"])]
-    log(f"Candidatas (score>=3, no enviadas): {len(candidatas)}")
+    candidatas = [n for n in todas if n["puntaje"] >= 2 and not ya_enviada(n["url"])]
+    log(f"Candidatas (score>=2, no enviadas): {len(candidatas)}")
 
     if not candidatas:
         log("Sin noticias nuevas relevantes esta hora.")
