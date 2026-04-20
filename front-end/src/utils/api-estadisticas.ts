@@ -1,6 +1,6 @@
 // Estadísticas y Timeline endpoints
 
-const API_BASE = import.meta.env.VITE_API_BASE || 'https://tvcpev0ryc.execute-api.sa-east-1.amazonaws.com';
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://tankear.com.ar/api';
 const DEFAULT_TIMEOUT = 30000;
 
 async function fetchWithTimeout(

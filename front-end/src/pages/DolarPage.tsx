@@ -9,7 +9,8 @@ import { LoginModal } from '../components/LoginModal';
 import { useUser } from '../hooks/useUser';
 import { useDolar, getSuperUSD } from '../hooks/useDolar';
 import { useOil } from '../hooks/useOil';
-import { DollarSignIcon, TrendingUpIcon, TrendingDownIcon, BarChart2Icon, ZapIcon, InfoIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { DollarSignIcon, TrendingUpIcon, TrendingDownIcon, BarChart2Icon, ZapIcon, InfoIcon, ShieldIcon, ArrowRightIcon } from 'lucide-react';
 
 function Skeleton({ w = 'w-20' }: { w?: string }) {
   return <div className={`${w} h-4 bg-slate-800 rounded animate-pulse inline-block`} />;
@@ -215,8 +216,28 @@ export function DolarPage() {
                   <p className="text-xs text-slate-500 mt-1">por litro · al tipo blue</p>
                 </div>
 
-                {/* Ad pequeño */}
-                <MockAdBlock />
+                {/* CTA seguros */}
+                <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 flex flex-col justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                    <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Seguros</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-200 font-semibold text-sm leading-snug">
+                      El dólar sube y tu seguro ajusta con él.
+                    </p>
+                    <p className="text-slate-500 text-xs mt-1">
+                      Cotizá hoy y fijá el precio antes del próximo aumento.
+                    </p>
+                  </div>
+                  <Link
+                    to="/cotizador"
+                    className="flex items-center justify-center gap-1.5 w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2 rounded-lg transition-colors"
+                  >
+                    Cotizar mi seguro
+                    <ArrowRightIcon className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
               </div>
             </section>
 

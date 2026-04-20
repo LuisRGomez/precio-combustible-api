@@ -15,3 +15,5 @@ samconfig.toml
 setup_aws.sh
 layer/
 src/db_dynamo.py
+do_mcp_config.json
+do_mcp_config.json

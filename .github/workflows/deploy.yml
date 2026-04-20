@@ -1,110 +1,46 @@
-name: Deploy Tankear
+name: Deploy a Tankear
 
 on:
   push:
-    branches: [master]
+    branches: [ master ]
 
 jobs:
-  # ─── Build frontend ────────────────────────────────────────────────────────
-  build-frontend:
-    name: Build Frontend
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        working-directory: front-end
-        run: npm install
-
-      - name: Build
-        working-directory: front-end
-        env:
-          VITE_API_BASE: ''
-        run: npm run build
-
-      - name: Upload dist artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dist
-          path: front-end/dist/
-          retention-days: 1
-
-  # ─── Deploy al servidor ────────────────────────────────────────────────────
   deploy:
-    name: Deploy to Server
     runs-on: ubuntu-latest
-    needs: build-frontend
+
     steps:
-      - name: Checkout
+      - name: Checkout código
         uses: actions/checkout@v4
 
-      - name: Download frontend dist
-        uses: actions/download-artifact@v4
+      - name: Copiar archivos backend al servidor
+        uses: appleboy/scp-action@v0.1.7
         with:
-          name: frontend-dist
-          path: front-end/dist/
+          host: ${{ secrets.DO_HOST }}
+          username: root
+          key: ${{ secrets.DO_SSH_KEY }}
+          source: "main_do.py,telegram_bot.py,nocturno_notify.py,noticias_bot.py,validador.py,promo_detector.py,scraper_do.py,update_prices.py,db_sqlite.py,db.py,geo.py,auth.py"
+          target: /var/www/tankear/api
+          strip_components: 0
 
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+      - name: Build frontend y reiniciar servicios
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DO_HOST }}
+          username: root
+          key: ${{ secrets.DO_SSH_KEY }}
+          script: |
+            set -e
 
-      - name: Deploy frontend
-        run: |
-          rsync -az --delete \
-            -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
-            front-end/dist/ \
-            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/tankear/frontend/
-          echo "✅ Frontend deployed"
+            echo "=== Frontend: build y deploy ==="
+            cd /var/www/tankear/frontend-src
+            git pull origin master
+            cd front-end
+            npm run build
+            cp -r dist/* /var/www/tankear/frontend/
+            nginx -s reload
 
-      - name: Deploy backend (si main_do.py cambió)
-        run: |
-          # Detectar si el backend cambió en este push
-          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E "^(main_do\.py|db_sqlite\.py|geo\.py|scraper_do\.py|precio_ciencia\.py)" || true)
+            echo "=== Reiniciando servicios backend ==="
+            systemctl restart tankear.service
+            systemctl restart telegram_bot.service
 
-          if [ -n "$CHANGED" ]; then
-            echo "📦 Backend cambió, desplegando: $CHANGED"
-
-            # Copiar archivos al servidor
-            for file in $CHANGED; do
-              if [ -f "$file" ]; then
-                scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
-                  "$file" \
-                  ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/var/www/tankear/api/
-
-                # main_do.py va también como main.py (el que usa el servicio)
-                if [ "$file" = "main_do.py" ]; then
-                  ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
-                    ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-                    "cp /var/www/tankear/api/main_do.py /var/www/tankear/api/main.py"
-                fi
-              fi
-            done
-
-            # Reiniciar el servicio
-            ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
-              ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-              "systemctl restart tankear && sleep 2 && systemctl is-active tankear"
-            echo "✅ Backend reiniciado"
-          else
-            echo "⏭️  Backend sin cambios, no se reinicia el servicio"
-          fi
-
-      - name: Health check
-        run: |
-          sleep 3
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://tankear.com.ar/)
-          if [ "$STATUS" = "200" ]; then
-            echo "✅ tankear.com.ar responde 200 OK"
-          else
-            echo "❌ tankear.com.ar devolvió HTTP $STATUS"
-            exit 1
-          fi
+            echo "✅ Deploy completo"

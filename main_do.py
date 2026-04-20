@@ -10,6 +10,7 @@ import requests, pandas as pd, numpy as np, json, os, threading, sqlite3, time, 
 import xml.etree.ElementTree as ET
 from typing import Optional
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 
 import db, geo
 from auth import verify_password, create_token, get_current_admin, ADMIN_USER, ADMIN_HASH
@@ -322,7 +323,8 @@ def get_cf_headers(request: Request) -> Optional[dict]:
 def _df_from_sqlite(provincia, localidad, producto, limit):
     """Lee estaciones desde el cache SQLite (fallback cuando CKAN no responde)."""
     records = db.get_estaciones(provincia=provincia, localidad=localidad,
-                                producto=producto, limit=limit)
+                                producto=producto, limit=limit,
+                                solo_recientes=True)
     if not records:
         return pd.DataFrame()
     df = pd.DataFrame(records)
@@ -394,6 +396,66 @@ def obtener_datos(provincia, localidad, limit):
         return df
     except Exception as ckan_err:
         raise HTTPException(status_code=502, detail=f"Sin cache local y CKAN no responde: {ckan_err}")
+
+
+def horario_actual_arg() -> str:
+    """
+    Devuelve 'Nocturno' entre las 00:00 y las 06:00 (hora Argentina, ART UTC-3).
+    Fuera de ese rango devuelve 'Diurno'.
+    """
+    hora = datetime.now(ZoneInfo("America/Argentina/Buenos_Aires")).hour
+    return "Nocturno" if hora < 6 else "Diurno"
+
+
+def filtrar_por_horario(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filtra el DataFrame para mostrar el precio correcto según hora Argentina.
+
+    Lógica:
+    - Determina si es horario Diurno o Nocturno ahora.
+    - Para estaciones que tienen precio Nocturno registrado Y es de noche → usa Nocturno.
+    - Para estaciones que solo tienen Diurno → siempre las incluye.
+    - Evita duplicados: si una estación tiene ambos registros, queda solo el relevante.
+    """
+    if "tipohorario" not in df.columns:
+        return df
+
+    horario = horario_actual_arg()
+
+    if horario == "Nocturno":
+        # Estaciones con precio nocturno → usar nocturno
+        # Estaciones sin precio nocturno (solo diurno) → usar diurno igual
+        key_cols = [c for c in ["empresa", "cuit", "direccion", "producto"] if c in df.columns]
+
+        # Identificar qué estaciones tienen precio nocturno
+        tiene_nocturno = set(
+            df[df["tipohorario"] == "Nocturno"]
+            .apply(lambda r: tuple(r[c] for c in key_cols), axis=1)
+        )
+
+        def elegir_fila(grp):
+            # Si el grupo tiene Nocturno → devolver el Nocturno
+            noc = grp[grp["tipohorario"] == "Nocturno"]
+            if not noc.empty:
+                return noc.iloc[[0]]
+            return grp.iloc[[0]]
+
+        if key_cols:
+            df = df.groupby(key_cols, sort=False, group_keys=False).apply(elegir_fila)
+    else:
+        # Horario diurno: descartar los registros nocturnos que tengan una contraparte diurna
+        key_cols = [c for c in ["empresa", "cuit", "direccion", "producto"] if c in df.columns]
+
+        def elegir_fila_diurno(grp):
+            dia = grp[grp["tipohorario"] == "Diurno"]
+            if not dia.empty:
+                return dia.iloc[[0]]
+            return grp.iloc[[0]]
+
+        if key_cols:
+            df = df.groupby(key_cols, sort=False, group_keys=False).apply(elegir_fila_diurno)
+
+    return df.reset_index(drop=True)
 
 
 def filtrar_por_fecha(df, fecha_desde):
@@ -469,6 +531,70 @@ def localidades(provincia: Optional[str] = Query(default=None)):
     return sorted(df["localidad"].dropna().str.strip().str.upper().unique().tolist())
 
 
+@app.get("/localidades/buscar", tags=["Geo"])
+def localidades_buscar(
+    q:        str            = Query(..., min_length=2, max_length=60),
+    provincia: Optional[str] = Query(default=None),
+    limit:    int            = Query(default=10, le=30),
+    tipos:    Optional[str]  = Query(default="localidad,entidad", description="localidad,entidad,paraje"),
+):
+    """
+    Autocomplete de localidades usando BAHRA (IGN).
+    Retorna lista de {nombre, provincia, departamento, lat, lon, tipo}.
+    """
+    conn = leads_db()
+    try:
+        # Verificar que la tabla existe
+        tbl = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='bahra_localidades'"
+        ).fetchone()
+        if not tbl:
+            return []
+
+        q_up = q.strip().upper()
+        tipo_list = [t.strip() for t in tipos.split(",") if t.strip()]
+        placeholders = ",".join("?" * len(tipo_list))
+
+        prov_clause = ""
+        prov_params: list = []
+        if provincia:
+            prov_clause = " AND provincia_upper = ?"
+            prov_params = [provincia.strip().upper()]
+
+        params = [f"{q_up}%", f"%{q_up}%"] + tipo_list + prov_params + [f"{q_up}%", limit]
+
+        rows = conn.execute(f"""
+            SELECT nombre, provincia, departamento, aglomerado, lat, lon, tipo, codigo_indec
+            FROM bahra_localidades
+            WHERE (nombre_upper LIKE ? OR nombre_upper LIKE ?)
+              AND tipo IN ({placeholders})
+              {prov_clause}
+            ORDER BY
+              CASE WHEN nombre_upper LIKE ? THEN 0 ELSE 1 END,
+              nombre
+            LIMIT ?
+        """, params).fetchall()
+
+        return [
+            {
+                "nombre":       r["nombre"],
+                "provincia":    r["provincia"],
+                "departamento": r["departamento"],
+                "aglomerado":   r["aglomerado"],
+                "lat":          r["lat"],
+                "lon":          r["lon"],
+                "tipo":         r["tipo"],
+                "codigo_indec": r["codigo_indec"],
+            }
+            for r in rows[:limit]
+        ]
+    except Exception as e:
+        print(f"[BAHRA buscar] Error: {e}")
+        return []
+    finally:
+        conn.close()
+
+
 # ── PRECIOS ───────────────────────────────────────────────────────────────────
 @app.get("/precios")
 def precios(provincia: str = Query(default="BUENOS AIRES"),
@@ -480,10 +606,11 @@ def precios(provincia: str = Query(default="BUENOS AIRES"),
     if producto:
         df = df[df["producto"].str.upper() == producto.upper()]
     df = filtrar_por_fecha(df, fecha_desde)
+    df = filtrar_por_horario(df)
     if "precio" in df.columns:
         df = df.sort_values("precio")
     cols = [c for c in COLS if c in df.columns]
-    return {"total": len(df), "estaciones": df_a_lista(df[cols])}
+    return {"total": len(df), "horario": horario_actual_arg(), "estaciones": df_a_lista(df[cols])}
 
 
 @app.get("/precios/cercanos")
@@ -497,12 +624,13 @@ def precios_cercanos(lat: float, lon: float, radio_km: float = 5.0,
     if producto:
         df = df[df["producto"].str.upper() == producto.upper()]
     df = filtrar_por_fecha(df, fecha_desde)
+    df = filtrar_por_horario(df)
     df["distancia_km"] = df.apply(
         lambda x: haversine(lat, lon, x.get("latitud"), x.get("longitud")), axis=1)
     df = df[df["distancia_km"] <= radio_km].sort_values("distancia_km")
     df["distancia_km"] = df["distancia_km"].round(2)
     cols = [c for c in COLS + ["distancia_km"] if c in df.columns]
-    return {"total": len(df), "radio_km": radio_km, "estaciones": df_a_lista(df[cols])}
+    return {"total": len(df), "radio_km": radio_km, "horario": horario_actual_arg(), "estaciones": df_a_lista(df[cols])}
 
 
 @app.get("/precios/baratos")
@@ -515,10 +643,11 @@ def precios_baratos(provincia: str = "BUENOS AIRES", localidad: Optional[str] = 
     if producto:
         df = df[df["producto"].str.upper() == producto.upper()]
     df = filtrar_por_fecha(df, fecha_desde)
+    df = filtrar_por_horario(df)
     if "precio" in df.columns:
         df = df.dropna(subset=["precio"]).sort_values("precio").head(top)
     cols = [c for c in COLS if c in df.columns]
-    return {"total": len(df), "estaciones": df_a_lista(df[cols])}
+    return {"total": len(df), "horario": horario_actual_arg(), "estaciones": df_a_lista(df[cols])}
 
 
 @app.get("/precios/smart")
@@ -649,8 +778,12 @@ def precios_smart(request: Request,
 
     if df.empty:
         return {"ubicacion_resuelta": location, "total": 0, "estaciones": []}
+    df = filtrar_por_horario(df)
+    if "precio" in df.columns and "distancia_km" not in df.columns:
+        df = df.sort_values("precio")
     cols = [c for c in COLS + ["distancia_km", "precio_vigente"] if c in df.columns]
     return {"ubicacion_resuelta": location, "total": len(df),
+            "horario": horario_actual_arg(),
             "estaciones": df_a_lista(df[cols])}
 
 
@@ -2347,6 +2480,153 @@ async def recibir_feedback(request: Request, body: FeedbackIn):
         </div></div>"""
         threading.Thread(target=send_internal_email, args=(f"{emoji} Feedback: {tipo_label} — {body.pagina or 'app'}", html), daemon=True).start()
     return {"ok": True}
+
+
+# ── ESTACIONES POR RED (GPS) ──────────────────────────────────────────────────
+import math as _math
+
+def _hav(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Distancia Haversine en km entre dos coordenadas."""
+    R = 6371.0
+    dlat = _math.radians(lat2 - lat1)
+    dlon = _math.radians(lon2 - lon1)
+    a = _math.sin(dlat / 2) ** 2 + \
+        _math.cos(_math.radians(lat1)) * _math.cos(_math.radians(lat2)) * \
+        _math.sin(dlon / 2) ** 2
+    return R * 2 * _math.atan2(_math.sqrt(a), _math.sqrt(1 - a))
+
+
+def _query_stations(table: str, marca: str,
+                    lat: Optional[float], lon: Optional[float],
+                    radio_km: float, limit: int) -> list:
+    conn = leads_db()
+    try:
+        rows = [dict(r) for r in conn.execute(f"SELECT * FROM {table}").fetchall()]
+    finally:
+        conn.close()
+    result = []
+    for r in rows:
+        r_lat, r_lon = r.get("lat"), r.get("lon")
+        if not r_lat or not r_lon:
+            continue
+        dist = _hav(lat, lon, r_lat, r_lon) if lat is not None and lon is not None else None
+        if dist is not None and dist > radio_km:
+            continue
+        r["marca"] = marca
+        r["distancia_km"] = round(dist, 2) if dist is not None else None
+        result.append(r)
+    if lat is not None and lon is not None:
+        result.sort(key=lambda x: x.get("distancia_km") or 9999)
+    return result[:limit]
+
+
+@app.get("/estaciones/ypf", tags=["Estaciones"])
+def est_ypf(lat: Optional[float] = None, lon: Optional[float] = None,
+            radio_km: float = Query(50.0, le=500), limit: int = Query(500, le=2000)):
+    """Estaciones YPF con coordenadas GPS. Filtro opcional por radio desde lat/lon."""
+    res = _query_stations("ypf_stations", "ypf", lat, lon, radio_km, limit)
+    return {"total": len(res), "marca": "ypf", "estaciones": res}
+
+
+@app.get("/estaciones/gulf", tags=["Estaciones"])
+def est_gulf(lat: Optional[float] = None, lon: Optional[float] = None,
+             radio_km: float = Query(50.0, le=500), limit: int = Query(500, le=2000)):
+    """Estaciones Gulf con coordenadas GPS."""
+    res = _query_stations("gulf_stations", "gulf", lat, lon, radio_km, limit)
+    return {"total": len(res), "marca": "gulf", "estaciones": res}
+
+
+@app.get("/estaciones/puma", tags=["Estaciones"])
+def est_puma(lat: Optional[float] = None, lon: Optional[float] = None,
+             radio_km: float = Query(50.0, le=500), limit: int = Query(500, le=2000)):
+    """Estaciones Puma con coordenadas GPS."""
+    res = _query_stations("puma_stations", "puma", lat, lon, radio_km, limit)
+    return {"total": len(res), "marca": "puma", "estaciones": res}
+
+
+@app.get("/estaciones/axion", tags=["Estaciones"])
+def est_axion(lat: Optional[float] = None, lon: Optional[float] = None,
+              radio_km: float = Query(50.0, le=500), limit: int = Query(500, le=2000)):
+    """Estaciones Axion con coordenadas GPS."""
+    res = _query_stations("axion_stations", "axion", lat, lon, radio_km, limit)
+    return {"total": len(res), "marca": "axion", "estaciones": res}
+
+
+@app.get("/estaciones/todas", tags=["Estaciones"])
+def est_todas(lat: Optional[float] = None, lon: Optional[float] = None,
+              radio_km: float = Query(50.0, le=500),
+              marcas: str = Query("ypf,gulf,puma,axion"),
+              limit: int = Query(2000, le=5000)):
+    """Todas las estaciones de las 4 redes. Filtro por radio y marcas."""
+    brand_map = {
+        "ypf":   "ypf_stations",
+        "gulf":  "gulf_stations",
+        "puma":  "puma_stations",
+        "axion": "axion_stations",
+    }
+    requested = [m.strip().lower() for m in marcas.split(",")]
+    all_st: list = []
+    for brand in requested:
+        if brand in brand_map:
+            all_st.extend(_query_stations(brand_map[brand], brand, lat, lon, radio_km, limit))
+    if lat is not None and lon is not None:
+        all_st.sort(key=lambda x: x.get("distancia_km") or 9999)
+    return {"total": len(all_st), "estaciones": all_st[:limit]}
+
+
+@app.get("/estaciones/cercanas", tags=["Estaciones"])
+def est_cercanas(lat: float, lon: float,
+                 radio_km: float = Query(10.0, le=100),
+                 marcas: str = Query("ypf,gulf,puma,axion"),
+                 limit: int = Query(20, le=100)):
+    """Las estaciones más cercanas a un punto, de todas las redes."""
+    brand_map = {
+        "ypf":   "ypf_stations",
+        "gulf":  "gulf_stations",
+        "puma":  "puma_stations",
+        "axion": "axion_stations",
+    }
+    requested = [m.strip().lower() for m in marcas.split(",")]
+    all_st: list = []
+    for brand in requested:
+        if brand in brand_map:
+            all_st.extend(_query_stations(brand_map[brand], brand, lat, lon, radio_km, 50))
+    all_st.sort(key=lambda x: x.get("distancia_km") or 9999)
+    return {"total": len(all_st), "estaciones": all_st[:limit]}
+
+
+# ── VUELOS (proxy OpenSky Network) ────────────────────────────────────────────
+_vuelos_cache: dict = {"data": None, "ts": 0.0}
+_VUELOS_TTL = 12  # segundos — OpenSky actualiza cada ~10s
+
+@app.get("/vuelos", tags=["Vuelos"])
+def vuelos_proxy():
+    """Proxy cacheado al API de OpenSky Network — vuelos sobre Argentina."""
+    now = time.time()
+    if _vuelos_cache["data"] and (now - _vuelos_cache["ts"]) < _VUELOS_TTL:
+        return _vuelos_cache["data"]
+    try:
+        r = requests.get(
+            "https://opensky-network.org/api/states/all",
+            params={"lamin": -55, "lamax": -22, "lomin": -73, "lomax": -53},
+            timeout=8,
+        )
+        if r.status_code == 429:
+            if _vuelos_cache["data"]:
+                return _vuelos_cache["data"]
+            raise HTTPException(status_code=429, detail="Rate limit OpenSky — intentá en un momento")
+        if not r.ok:
+            raise HTTPException(status_code=502, detail=f"Error OpenSky: {r.status_code}")
+        data = r.json()
+        _vuelos_cache["data"] = data
+        _vuelos_cache["ts"] = now
+        return data
+    except HTTPException:
+        raise
+    except Exception:
+        if _vuelos_cache["data"]:
+            return _vuelos_cache["data"]
+        raise HTTPException(status_code=503, detail="No se pudo conectar con OpenSky Network")
 
 
 if __name__ == "__main__":

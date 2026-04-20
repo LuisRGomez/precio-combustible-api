@@ -16,8 +16,8 @@ import { BarChart2Icon } from 'lucide-react';
 
 export function ComparativaPage() {
   useSEO({
-    title:       'Comparativa de precios nafta por empresa',
-    description: 'Comparar precios de nafta y gasoil entre YPF, Shell, Axion, Puma y más. Histórico de precios en Argentina. Actualizamos todos los días.',
+    title:       'Comparativa de precios de nafta en Argentina — YPF, Shell, Axion y más',
+    description: 'Compará precios de nafta Super 92, Infinia, Premium y gasoil entre YPF, Shell, Axion, Puma y más en Argentina. Histórico actualizado diariamente.',
     canonical:   'https://tankear.com.ar/comparativa',
   });
   const { user, logout } = useUser();
