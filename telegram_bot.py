@@ -23,6 +23,7 @@ import requests
 import subprocess
 import time
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from collections import defaultdict
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -72,6 +73,12 @@ PROV_NORM = {
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def log(msg: str):
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def horario_actual() -> str:
+    """Devuelve 'Nocturno' entre 00:00 y 06:00 hora argentina, sino 'Diurno'."""
+    hora = datetime.now(ZoneInfo("America/Argentina/Buenos_Aires")).hour
+    return "Nocturno" if hora < 6 else "Diurno"
 
 
 def norm_prov(s: str) -> str:
@@ -213,24 +220,27 @@ def precios_provincia(provincia: str = None) -> dict:
     conn = _conn()
     fecha_filter = "fecha_vigencia >= datetime((SELECT MAX(fecha_vigencia) FROM estaciones), '-72 hours')"
     precio_filter = "precio >= 1000"
+    horario = horario_actual()
 
     if provincia:
         rows = conn.execute(f"""
             SELECT producto, AVG(precio) AS avg_p, MIN(precio) AS min_p
             FROM estaciones
             WHERE {precio_filter} AND {fecha_filter}
+              AND tipohorario = ?
               AND UPPER(provincia) = ?
             GROUP BY producto HAVING COUNT(*) >= 3
             ORDER BY producto
-        """, (provincia.upper(),)).fetchall()
+        """, (horario, provincia.upper())).fetchall()
     else:
         rows = conn.execute(f"""
             SELECT producto, AVG(precio) AS avg_p, MIN(precio) AS min_p
             FROM estaciones
             WHERE {precio_filter} AND {fecha_filter}
+              AND tipohorario = ?
             GROUP BY producto HAVING COUNT(*) >= 10
             ORDER BY producto
-        """).fetchall()
+        """, (horario,)).fetchall()
     conn.close()
 
     result = {}
@@ -248,12 +258,15 @@ def estaciones_baratas(provincia: str = None, producto_kw: str = "super",
     """Retorna las N estaciones más baratas para un producto (datos recientes)."""
     conn = _conn()
     fecha_filter = "fecha_vigencia >= datetime((SELECT MAX(fecha_vigencia) FROM estaciones), '-72 hours')"
+    horario = horario_actual()
     q = f"""
         SELECT empresa, bandera, direccion, localidad, provincia, producto, precio
         FROM estaciones
-        WHERE precio >= 1000 AND {fecha_filter} AND LOWER(producto) LIKE ?
+        WHERE precio >= 1000 AND {fecha_filter}
+          AND tipohorario = ?
+          AND LOWER(producto) LIKE ?
     """
-    params = [f"%{producto_kw.lower()}%"]
+    params = [horario, f"%{producto_kw.lower()}%"]
     if provincia:
         q += " AND UPPER(provincia) = ?"
         params.append(provincia.upper())

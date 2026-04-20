@@ -10,6 +10,7 @@ import requests, pandas as pd, numpy as np, json, os, threading, sqlite3, time, 
 import xml.etree.ElementTree as ET
 from typing import Optional
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 
 import db, geo
 from auth import verify_password, create_token, get_current_admin, ADMIN_USER, ADMIN_HASH
@@ -397,6 +398,66 @@ def obtener_datos(provincia, localidad, limit):
         raise HTTPException(status_code=502, detail=f"Sin cache local y CKAN no responde: {ckan_err}")
 
 
+def horario_actual_arg() -> str:
+    """
+    Devuelve 'Nocturno' entre las 00:00 y las 06:00 (hora Argentina, ART UTC-3).
+    Fuera de ese rango devuelve 'Diurno'.
+    """
+    hora = datetime.now(ZoneInfo("America/Argentina/Buenos_Aires")).hour
+    return "Nocturno" if hora < 6 else "Diurno"
+
+
+def filtrar_por_horario(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Filtra el DataFrame para mostrar el precio correcto según hora Argentina.
+
+    Lógica:
+    - Determina si es horario Diurno o Nocturno ahora.
+    - Para estaciones que tienen precio Nocturno registrado Y es de noche → usa Nocturno.
+    - Para estaciones que solo tienen Diurno → siempre las incluye.
+    - Evita duplicados: si una estación tiene ambos registros, queda solo el relevante.
+    """
+    if "tipohorario" not in df.columns:
+        return df
+
+    horario = horario_actual_arg()
+
+    if horario == "Nocturno":
+        # Estaciones con precio nocturno → usar nocturno
+        # Estaciones sin precio nocturno (solo diurno) → usar diurno igual
+        key_cols = [c for c in ["empresa", "cuit", "direccion", "producto"] if c in df.columns]
+
+        # Identificar qué estaciones tienen precio nocturno
+        tiene_nocturno = set(
+            df[df["tipohorario"] == "Nocturno"]
+            .apply(lambda r: tuple(r[c] for c in key_cols), axis=1)
+        )
+
+        def elegir_fila(grp):
+            # Si el grupo tiene Nocturno → devolver el Nocturno
+            noc = grp[grp["tipohorario"] == "Nocturno"]
+            if not noc.empty:
+                return noc.iloc[[0]]
+            return grp.iloc[[0]]
+
+        if key_cols:
+            df = df.groupby(key_cols, sort=False, group_keys=False).apply(elegir_fila)
+    else:
+        # Horario diurno: descartar los registros nocturnos que tengan una contraparte diurna
+        key_cols = [c for c in ["empresa", "cuit", "direccion", "producto"] if c in df.columns]
+
+        def elegir_fila_diurno(grp):
+            dia = grp[grp["tipohorario"] == "Diurno"]
+            if not dia.empty:
+                return dia.iloc[[0]]
+            return grp.iloc[[0]]
+
+        if key_cols:
+            df = df.groupby(key_cols, sort=False, group_keys=False).apply(elegir_fila_diurno)
+
+    return df.reset_index(drop=True)
+
+
 def filtrar_por_fecha(df, fecha_desde):
     if fecha_desde is None or "fecha_vigencia" not in df.columns:
         return df
@@ -545,10 +606,11 @@ def precios(provincia: str = Query(default="BUENOS AIRES"),
     if producto:
         df = df[df["producto"].str.upper() == producto.upper()]
     df = filtrar_por_fecha(df, fecha_desde)
+    df = filtrar_por_horario(df)
     if "precio" in df.columns:
         df = df.sort_values("precio")
     cols = [c for c in COLS if c in df.columns]
-    return {"total": len(df), "estaciones": df_a_lista(df[cols])}
+    return {"total": len(df), "horario": horario_actual_arg(), "estaciones": df_a_lista(df[cols])}
 
 
 @app.get("/precios/cercanos")
@@ -562,12 +624,13 @@ def precios_cercanos(lat: float, lon: float, radio_km: float = 5.0,
     if producto:
         df = df[df["producto"].str.upper() == producto.upper()]
     df = filtrar_por_fecha(df, fecha_desde)
+    df = filtrar_por_horario(df)
     df["distancia_km"] = df.apply(
         lambda x: haversine(lat, lon, x.get("latitud"), x.get("longitud")), axis=1)
     df = df[df["distancia_km"] <= radio_km].sort_values("distancia_km")
     df["distancia_km"] = df["distancia_km"].round(2)
     cols = [c for c in COLS + ["distancia_km"] if c in df.columns]
-    return {"total": len(df), "radio_km": radio_km, "estaciones": df_a_lista(df[cols])}
+    return {"total": len(df), "radio_km": radio_km, "horario": horario_actual_arg(), "estaciones": df_a_lista(df[cols])}
 
 
 @app.get("/precios/baratos")
@@ -580,10 +643,11 @@ def precios_baratos(provincia: str = "BUENOS AIRES", localidad: Optional[str] = 
     if producto:
         df = df[df["producto"].str.upper() == producto.upper()]
     df = filtrar_por_fecha(df, fecha_desde)
+    df = filtrar_por_horario(df)
     if "precio" in df.columns:
         df = df.dropna(subset=["precio"]).sort_values("precio").head(top)
     cols = [c for c in COLS if c in df.columns]
-    return {"total": len(df), "estaciones": df_a_lista(df[cols])}
+    return {"total": len(df), "horario": horario_actual_arg(), "estaciones": df_a_lista(df[cols])}
 
 
 @app.get("/precios/smart")
@@ -714,8 +778,12 @@ def precios_smart(request: Request,
 
     if df.empty:
         return {"ubicacion_resuelta": location, "total": 0, "estaciones": []}
+    df = filtrar_por_horario(df)
+    if "precio" in df.columns and "distancia_km" not in df.columns:
+        df = df.sort_values("precio")
     cols = [c for c in COLS + ["distancia_km", "precio_vigente"] if c in df.columns]
     return {"ubicacion_resuelta": location, "total": len(df),
+            "horario": horario_actual_arg(),
             "estaciones": df_a_lista(df[cols])}
 
 
