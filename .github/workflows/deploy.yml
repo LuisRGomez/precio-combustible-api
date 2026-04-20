@@ -40,7 +40,7 @@ jobs:
             nginx -s reload
 
             echo "=== Reiniciando servicios backend ==="
-            systemctl restart tankear-api
-            systemctl restart tankear-bot
+            systemctl restart tankear.service
+            systemctl restart telegram_bot.service
 
             echo "✅ Deploy completo"
