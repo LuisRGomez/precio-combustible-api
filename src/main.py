@@ -562,11 +562,19 @@ def precios_smart(
 
     if resolved_lat and resolved_lon:
         closest = db.localidad_mas_cercana(resolved_lat, resolved_lon, resolved_provincia)
+        # Si la localidad más cercana dentro de la provincia está a más de 20km,
+        # la provincia cacheada probablemente es incorrecta (ISP en otra zona).
+        # Buscamos sin filtro de provincia para encontrar la localidad real.
+        if not closest or closest["distancia_km"] > 20:
+            closest_all = db.localidad_mas_cercana(resolved_lat, resolved_lon)
+            if closest_all and (not closest or closest_all["distancia_km"] < closest["distancia_km"]):
+                closest = closest_all
+                resolved_provincia = closest["provincia"]
+                location["provincia"] = resolved_provincia
+                location["precision"] = "localidad"
+                print(f"[GEO] Provincia corregida por coords: {resolved_provincia} ({closest['distancia_km']}km)")
         if closest:
             distancia_dataset_km = closest["distancia_km"]
-            # Siempre usamos la localidad más cercana a las coordenadas ACTUALES para
-            # la query CKAN. No usamos la localidad cacheada en sesión porque puede
-            # ser de una posición anterior (misma IP, distinta ubicación GPS).
             localidad_dataset = closest["localidad"]
             if not resolved_localidad:
                 resolved_localidad = localidad_dataset
@@ -671,8 +679,13 @@ def precios_smart(
                     f"en el radio de {radio_km}km."
                 )
     else:
-        # Fallback por zona administrativa
-        df = obtener_datos(resolved_provincia, resolved_localidad, limit)
+        # Fallback por zona administrativa.
+        # Con GPS: usar localidad_dataset (corregida por localidad_mas_cercana).
+        # Sin GPS (IP): no usar localidad — ip-api devuelve nombres de ciudad que no
+        # coinciden con las localidades del dataset (ej: "BUENOS AIRES" no existe en CABA).
+        tiene_coords = resolved_lat is not None and resolved_lon is not None
+        query_localidad = (localidad_dataset or resolved_localidad) if tiene_coords else None
+        df = obtener_datos(resolved_provincia, query_localidad, limit)
         if not df.empty:
             if producto:
                 df = df[df['producto'].str.upper() == producto.upper()]
@@ -717,6 +730,10 @@ def precios_estadisticas(
     Estadísticas de precios para una zona: promedio, mínimo, máximo, mediana.
     Agrupa por producto y por bandera. Usa solo precios con fecha_vigencia reciente (últimos 12 meses).
     """
+    # Normalizar alias de provincia (CAPITAL FEDERAL → CABA)
+    provincia = CKAN_PROV_MAP.get(provincia.upper().strip(), provincia.upper().strip())
+    if provincia == "CAPITAL FEDERAL":
+        provincia = "CABA"
     df = obtener_datos(provincia, localidad, limit)
     if df.empty:
         return {"total_registros": 0, "provincia": provincia, "localidad": localidad, "por_producto": []}

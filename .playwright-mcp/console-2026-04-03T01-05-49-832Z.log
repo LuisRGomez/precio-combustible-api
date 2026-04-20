@@ -1,0 +1,1 @@
+[    5296ms] [ERROR] Blocked script execution in 'https://raw.githubusercontent.com/Bluelytics/bluelytics_api/main/v2.go' because the document's frame is sandboxed and the 'allow-scripts' permission is not set. @ https://raw.githubusercontent.com/Bluelytics/bluelytics_api/main/v2.go:0

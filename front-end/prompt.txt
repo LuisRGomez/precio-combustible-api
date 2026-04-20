@@ -1,0 +1,3836 @@
+```App.tsx
+import React from 'react'
+import { Dashboard } from './pages/Dashboard'
+export function App() {
+  return <Dashboard />
+}
+
+```
+```components/FuelMap.tsx
+import React, { useCallback, useEffect, useState, useRef } from 'react'
+import { Station, getProductInfo } from '../types'
+import { getCompanyColor, formatCurrency } from '../utils/api'
+import { MapPinIcon } from 'lucide-react'
+interface FuelMapProps {
+  data: Station[]
+  selectedStation?: Station | null
+}
+function MapPlaceholder() {
+  return (
+    <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-xl h-[600px] flex flex-col items-center justify-center gap-4">
+      <MapPinIcon className="w-12 h-12 text-slate-600" />
+      <p className="text-slate-400 text-sm">Cargando mapa...</p>
+    </div>
+  )
+}
+function MapError({ message }: { message?: string }) {
+  return (
+    <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-xl h-[600px] flex flex-col items-center justify-center gap-4">
+      <MapPinIcon className="w-12 h-12 text-slate-600" />
+      <p className="text-slate-400 text-sm">No se pudo cargar el mapa</p>
+      {message && <p className="text-slate-500 text-xs">{message}</p>}
+    </div>
+  )
+}
+function formatVigencia(fecha: string): string {
+  if (!fecha) return ''
+  try {
+    return new Date(fecha).toLocaleDateString('es-AR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
+  } catch {
+    return fecha
+  }
+}
+function getMarkerKey(station: Station): string {
+  return `${station.empresa}|${station.direccion}|${station.producto}`
+}
+function buildPopupHtml(station: Station): string {
+  const product = getProductInfo(station.producto)
+  const price = formatCurrency(station.precio)
+  const vigencia = station.fecha_vigencia
+    ? formatVigencia(station.fecha_vigencia)
+    : ''
+  const bandera =
+    station.tipo_bandera && station.tipo_bandera !== 'PROPIA'
+      ? `<span style="display:inline-block;margin-left:4px;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:500;background:#e2e8f0;color:#64748b;">${station.tipo_bandera}</span>`
+      : ''
+  return `
+    <div style="padding:4px;font-family:system-ui,sans-serif;">
+      <h3 style="font-weight:700;color:#0f172a;font-size:15px;margin:0 0 6px 0;">${station.bandera || station.empresa}</h3>
+      <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;">
+        <span style="color:#059669;font-weight:700;font-size:17px;">${price}</span>
+        <span style="color:#94a3b8;font-size:11px;">${product.unit}</span>
+      </div>
+      <div style="margin-bottom:8px;">
+        <span style="display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;color:white;background:${product.color};">${product.shortLabel}</span>
+        ${bandera}
+      </div>
+      <div style="font-size:12px;color:#475569;">
+        <p style="margin:2px 0;"><strong>Dirección:</strong> ${station.direccion}</p>
+        <p style="margin:2px 0;">${station.localidad}, ${station.provincia}${station.codigo_postal ? ` <span style="color:#94a3b8;">(${station.codigo_postal})</span>` : ''}</p>
+        ${vigencia ? `<p style="margin:4px 0 0;padding-top:4px;border-top:1px solid #e2e8f0;color:#94a3b8;"><strong>Vigencia:</strong> ${vigencia}</p>` : ''}
+      </div>
+    </div>
+  `
+}
+export function FuelMap({ data, selectedStation }: FuelMapProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const mapRef = useRef<any>(null)
+  const markersRef = useRef<Map<string, any>>(new Map())
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const leafletRef = useRef<any>(null)
+  // Initialize map once
+  useEffect(() => {
+    let destroyed = false
+    async function init() {
+      try {
+        const L = await import('leaflet')
+        const leaflet = L.default || L
+        await import('leaflet/dist/leaflet.css')
+        leafletRef.current = leaflet
+        // Fix default icon paths
+        try {
+          delete (leaflet.Icon.Default.prototype as any)._getIconUrl
+          leaflet.Icon.Default.mergeOptions({
+            iconRetinaUrl:
+              'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+            iconUrl:
+              'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+            shadowUrl:
+              'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+          })
+        } catch {}
+        if (destroyed || !containerRef.current) return
+        const map = leaflet.map(containerRef.current, {
+          center: [-34.6037, -58.3816],
+          zoom: 10,
+          zoomControl: true,
+        })
+        leaflet
+          .tileLayer(
+            'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            {
+              attribution:
+                '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            },
+          )
+          .addTo(map)
+        mapRef.current = map
+        setLoading(false)
+      } catch (err: any) {
+        if (!destroyed) {
+          console.error('Failed to init Leaflet map:', err)
+          setError(err.message || 'Error al cargar Leaflet')
+        }
+      }
+    }
+    init()
+    return () => {
+      destroyed = true
+      if (mapRef.current) {
+        try {
+          mapRef.current.remove()
+        } catch {}
+        mapRef.current = null
+      }
+      markersRef.current.clear()
+    }
+  }, [])
+  // Update markers when data changes
+  useEffect(() => {
+    const map = mapRef.current
+    const L = leafletRef.current
+    if (!map || !L) return
+    // Clear old markers
+    markersRef.current.forEach((marker) => {
+      try {
+        map.removeLayer(marker)
+      } catch {}
+    })
+    markersRef.current.clear()
+    const validData = data.filter(
+      (d) =>
+        d.latitud &&
+        d.longitud &&
+        !isNaN(d.latitud) &&
+        !isNaN(d.longitud) &&
+        d.latitud !== 0,
+    )
+    if (validData.length === 0) return
+    // Add new markers
+    validData.forEach((station) => {
+      try {
+        const color = getCompanyColor(station.empresa)
+        const icon = L.divIcon({
+          className: 'custom-marker',
+          html: `<div style="background-color:${color};width:16px;height:16px;border-radius:50%;border:2px solid white;box-shadow:0 0 8px rgba(0,0,0,0.8);"></div>`,
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+          popupAnchor: [0, -8],
+        })
+        const marker = L.marker([station.latitud!, station.longitud!], {
+          icon,
+        })
+          .addTo(map)
+          .bindPopup(buildPopupHtml(station), {
+            maxWidth: 280,
+            className: 'custom-popup',
+          })
+        markersRef.current.set(getMarkerKey(station), marker)
+      } catch (e) {
+        console.warn('Error adding marker:', e)
+      }
+    })
+    // Fit bounds
+    try {
+      const lats = validData.map((d) => d.latitud!)
+      const lons = validData.map((d) => d.longitud!)
+      const bounds = L.latLngBounds(
+        [Math.min(...lats), Math.min(...lons)],
+        [Math.max(...lats), Math.max(...lons)],
+      )
+      map.fitBounds(bounds, {
+        padding: [50, 50],
+        maxZoom: 15,
+      })
+    } catch (e) {
+      console.warn('Error fitting bounds:', e)
+    }
+  }, [data, loading])
+  // Fly to selected station
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !selectedStation?.latitud || !selectedStation?.longitud) return
+    try {
+      map.flyTo([selectedStation.latitud, selectedStation.longitud], 16, {
+        duration: 1.2,
+      })
+      const key = getMarkerKey(selectedStation)
+      setTimeout(() => {
+        const marker = markersRef.current.get(key)
+        if (marker) {
+          try {
+            marker.openPopup()
+          } catch {}
+        }
+      }, 1300)
+    } catch (e) {
+      console.warn('Error flying to station:', e)
+    }
+  }, [selectedStation])
+  if (error) return <MapError message={error} />
+  return (
+    <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-xl overflow-hidden h-[600px] relative z-0">
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center z-10">
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-3 border-slate-700 border-t-amber-500 rounded-full animate-spin"></div>
+            <p className="text-slate-400 text-sm">Cargando mapa...</p>
+          </div>
+        </div>
+      )}
+      <div
+        ref={containerRef}
+        style={{
+          height: '100%',
+          width: '100%',
+          background: '#0f172a',
+        }}
+      />
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        .custom-popup .leaflet-popup-content-wrapper { border-radius: 0.5rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+        .custom-popup .leaflet-popup-content { margin: 12px; }
+        .custom-marker { background: none !important; border: none !important; }
+      `,
+        }}
+      />
+    </div>
+  )
+}
+
+```
+```components/Header.tsx
+import React, { useEffect, useState } from 'react'
+import { FuelIcon, CalendarIcon } from 'lucide-react'
+import { fetchDatasetInfo, DatasetInfo } from '../utils/api'
+export function Header() {
+  const [info, setInfo] = useState<DatasetInfo | null>(null)
+  useEffect(() => {
+    fetchDatasetInfo().then(setInfo)
+  }, [])
+  const lastModified = info?.last_modified
+    ? new Date(info.last_modified).toLocaleDateString('es-AR', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null
+  return (
+    <header className="w-full bg-slate-950 border-b border-slate-800 sticky top-0 z-50">
+      <div className="h-1 w-full bg-gradient-to-r from-amber-600 via-amber-400 to-amber-600"></div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-amber-500/10 rounded-lg">
+            <FuelIcon className="w-6 h-6 text-amber-500" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-100 leading-tight">
+              Combustible Argentina
+            </h1>
+            <p className="text-xs text-slate-400 font-medium">
+              Precios en tiempo real
+            </p>
+          </div>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-4">
+          {lastModified && (
+            <div className="flex items-center gap-1.5 text-xs text-slate-500">
+              <CalendarIcon className="w-3.5 h-3.5" />
+              <span>Datos: {lastModified}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            Sistema Activo
+          </div>
+        </div>
+      </div>
+    </header>
+  )
+}
+
+```
+```components/PriceCalculator.tsx
+import React, { useState } from 'react'
+import { Station } from '../types'
+import { formatCurrency } from '../utils/api'
+import { CalculatorIcon, DropletsIcon, RouteIcon } from 'lucide-react'
+interface PriceCalculatorProps {
+  data: Station[]
+}
+export function PriceCalculator({ data }: PriceCalculatorProps) {
+  const [liters, setLiters] = useState<string>('40')
+  const [distance, setDistance] = useState<string>('100')
+  const [consumption, setConsumption] = useState<string>('12')
+  const [activeTab, setActiveTab] = useState<'fill' | 'trip'>('fill')
+  if (!data || data.length === 0) return null
+  const validPrices = data.map((d) => d.precio).filter((p) => p > 0)
+  if (validPrices.length === 0) return null
+  const minPrice = Math.min(...validPrices)
+  const maxPrice = Math.max(...validPrices)
+  const avgPrice = validPrices.reduce((a, b) => a + b, 0) / validPrices.length
+  // Fill calculation
+  const l = parseFloat(liters) || 0
+  const costMin = l * minPrice
+  const costMax = l * maxPrice
+  const savings = costMax - costMin
+  // Trip calculation
+  const dist = parseFloat(distance) || 0
+  const cons = parseFloat(consumption) || 1 // avoid div by 0
+  const tripLiters = dist / cons
+  const tripCostAvg = tripLiters * avgPrice
+  return (
+    <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-xl p-5 shadow-xl mt-6">
+      <div className="flex items-center gap-2 mb-5 pb-4 border-b border-slate-800">
+        <CalculatorIcon className="w-5 h-5 text-amber-500" />
+        <h2 className="text-lg font-semibold text-slate-100">Calculadora</h2>
+      </div>
+
+      <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800 mb-5">
+        <button
+          onClick={() => setActiveTab('fill')}
+          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2 ${activeTab === 'fill' ? 'bg-amber-500/20 text-amber-500' : 'text-slate-400 hover:text-slate-200'}`}
+        >
+          <DropletsIcon className="w-4 h-4" />
+          Cargar Tanque
+        </button>
+        <button
+          onClick={() => setActiveTab('trip')}
+          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2 ${activeTab === 'trip' ? 'bg-amber-500/20 text-amber-500' : 'text-slate-400 hover:text-slate-200'}`}
+        >
+          <RouteIcon className="w-4 h-4" />
+          Viaje
+        </button>
+      </div>
+
+      {activeTab === 'fill' ? (
+        <div className="space-y-5">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-slate-300">
+              Litros a cargar
+            </label>
+            <div className="relative">
+              <input
+                type="number"
+                value={liters}
+                onChange={(e) => setLiters(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-3 pr-10 py-2.5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
+                min="1"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
+                L
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-slate-950 rounded-lg p-4 border border-slate-800 space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-slate-400">En la más barata:</span>
+              <span className="font-bold text-emerald-400">
+                {formatCurrency(costMin)}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-slate-400">En la más cara:</span>
+              <span className="font-bold text-red-400">
+                {formatCurrency(costMax)}
+              </span>
+            </div>
+            <div className="pt-3 border-t border-slate-800 flex justify-between items-center">
+              <span className="text-sm font-medium text-amber-500">
+                Ahorro posible:
+              </span>
+              <span className="font-bold text-amber-500">
+                {formatCurrency(savings)}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-300">
+                Distancia
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={distance}
+                  onChange={(e) => setDistance(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-3 pr-8 py-2.5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
+                  min="1"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
+                  km
+                </span>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-slate-300">
+                Consumo
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={consumption}
+                  onChange={(e) => setConsumption(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-3 pr-10 py-2.5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500"
+                  min="1"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">
+                  km/l
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-950 rounded-lg p-4 border border-slate-800 space-y-3 mt-2">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-slate-400">
+                Combustible necesario:
+              </span>
+              <span className="font-bold text-slate-200">
+                {tripLiters.toFixed(1)} L
+              </span>
+            </div>
+            <div className="pt-3 border-t border-slate-800 flex justify-between items-center">
+              <span className="text-sm font-medium text-amber-500">
+                Costo estimado (promedio):
+              </span>
+              <span className="font-bold text-amber-500">
+                {formatCurrency(tripCostAvg)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+```
+```components/PriceChart.tsx
+import React, { useMemo, useState } from 'react'
+import { Station } from '../types'
+import { getCompanyColor } from '../utils/api'
+import { BarChart3Icon } from 'lucide-react'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts'
+interface PriceChartProps {
+  data: Station[]
+}
+const PRODUCT_TABS = [
+  {
+    label: 'Nafta Súper',
+    match: 'entre 92 y 95',
+  },
+  {
+    label: 'Nafta Premium',
+    match: 'más de 95',
+  },
+  {
+    label: 'Gasoil G2',
+    match: 'Gas Oil Grado 2',
+  },
+  {
+    label: 'Gasoil G3',
+    match: 'Gas Oil Grado 3',
+  },
+  {
+    label: 'GNC',
+    match: 'GNC',
+  },
+]
+export function PriceChart({ data }: PriceChartProps) {
+  const [selectedProduct, setSelectedProduct] = useState(0)
+  // Detect which products exist in data
+  const availableTabs = useMemo(() => {
+    return PRODUCT_TABS.map((tab, idx) => ({
+      ...tab,
+      idx,
+      count: data.filter((d) => d.producto.includes(tab.match) && d.precio > 0)
+        .length,
+    })).filter((t) => t.count > 0)
+  }, [data])
+  // Auto-select first available tab
+  const activeTab =
+    availableTabs.find((t) => t.idx === selectedProduct) || availableTabs[0]
+  const chartData = useMemo(() => {
+    if (!data || data.length === 0 || !activeTab) return []
+    // Filter by selected product
+    const filtered = data.filter(
+      (d) => d.producto.includes(activeTab.match) && d.precio > 0,
+    )
+    // Group by company
+    const companyStats = filtered.reduce(
+      (acc, curr) => {
+        if (!acc[curr.empresa]) {
+          acc[curr.empresa] = {
+            sum: 0,
+            count: 0,
+            empresa: curr.empresa,
+          }
+        }
+        acc[curr.empresa].sum += curr.precio
+        acc[curr.empresa].count += 1
+        return acc
+      },
+      {} as Record<
+        string,
+        {
+          sum: number
+          count: number
+          empresa: string
+        }
+      >,
+    )
+    return Object.values(companyStats)
+      .map((stat) => ({
+        empresa: stat.empresa,
+        precioPromedio: Math.round((stat.sum / stat.count) * 100) / 100,
+        color: getCompanyColor(stat.empresa),
+        estaciones: stat.count,
+      }))
+      .sort((a, b) => a.precioPromedio - b.precioPromedio)
+      .slice(0, 12) // Top 12 to keep chart readable
+  }, [data, activeTab])
+  if (chartData.length === 0 || availableTabs.length === 0) return null
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const entry = payload[0].payload
+      return (
+        <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-xl">
+          <p className="font-bold text-slate-200 mb-1">{entry.empresa}</p>
+          <p className="text-amber-500 font-medium">
+            Promedio:{' '}
+            {new Intl.NumberFormat('es-AR', {
+              style: 'currency',
+              currency: 'ARS',
+            }).format(payload[0].value)}
+          </p>
+          <p className="text-slate-400 text-xs mt-1">
+            {entry.estaciones} estación{entry.estaciones > 1 ? 'es' : ''}
+          </p>
+        </div>
+      )
+    }
+    return null
+  }
+  return (
+    <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-xl p-5 mb-6">
+      <div className="flex items-center gap-2 mb-4">
+        <BarChart3Icon className="w-5 h-5 text-amber-500" />
+        <h2 className="text-lg font-semibold text-slate-100">
+          Comparativa por Empresa
+        </h2>
+      </div>
+
+      {/* Product tabs */}
+      <div className="flex flex-wrap gap-1.5 mb-5">
+        {availableTabs.map((tab) => (
+          <button
+            key={tab.idx}
+            onClick={() => setSelectedProduct(tab.idx)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${activeTab?.idx === tab.idx ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30' : 'text-slate-400 bg-slate-800/50 border border-slate-700/50 hover:text-slate-200'}`}
+          >
+            {tab.label}
+            <span className="ml-1 opacity-60">({tab.count})</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="h-[300px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart
+            data={chartData}
+            layout="vertical"
+            margin={{
+              top: 5,
+              right: 30,
+              left: 40,
+              bottom: 5,
+            }}
+          >
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="#334155"
+              horizontal
+              vertical={false}
+            />
+            <XAxis
+              type="number"
+              tickFormatter={(v) => `$${v.toLocaleString('es-AR')}`}
+              stroke="#94a3b8"
+              fontSize={12}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              dataKey="empresa"
+              type="category"
+              stroke="#94a3b8"
+              fontSize={11}
+              tickLine={false}
+              axisLine={false}
+              width={110}
+            />
+            <Tooltip
+              content={<CustomTooltip />}
+              cursor={{
+                fill: '#1e293b',
+              }}
+            />
+            <Bar dataKey="precioPromedio" radius={[0, 4, 4, 0]} barSize={22}>
+              {chartData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
+```
+```components/PriceStats.tsx
+import React, { useEffect, useMemo, useState, Children } from 'react'
+import { Station, PRODUCT_MAP, getProductInfo, FilterState } from '../types'
+import { formatCurrency } from '../utils/api'
+import {
+  fetchEstadisticas,
+  EstadisticasResponse,
+} from '../utils/api-estadisticas'
+import {
+  TrendingDownIcon,
+  TrendingUpIcon,
+  DollarSignIcon,
+  MapPinIcon,
+} from 'lucide-react'
+import { motion } from 'framer-motion'
+interface PriceStatsProps {
+  data: Station[]
+  filters: FilterState
+  ubicacion: any
+}
+export function PriceStats({ data, filters, ubicacion }: PriceStatsProps) {
+  const [estadisticas, setEstadisticas] = useState<EstadisticasResponse | null>(
+    null,
+  )
+  // Fetch estadísticas from API
+  useEffect(() => {
+    const loadEstadisticas = async () => {
+      if (!ubicacion) return
+      try {
+        const result = await fetchEstadisticas({
+          provincia: filters.provincia || ubicacion.provincia,
+          localidad: filters.localidad || ubicacion.localidad_dataset,
+          producto: filters.producto,
+        })
+        setEstadisticas(result)
+        console.log('[PriceStats] Estadísticas loaded:', result)
+      } catch (error) {
+        console.error('[PriceStats] Error loading estadísticas:', error)
+        setEstadisticas(null)
+      }
+    }
+    loadEstadisticas()
+  }, [filters.provincia, filters.localidad, filters.producto, ubicacion])
+  if (!data || data.length === 0) return null
+  // Find available products in data
+  const productCounts = data.reduce(
+    (acc, d) => {
+      if (d.precio > 0) {
+        acc[d.producto] = (acc[d.producto] || 0) + 1
+      }
+      return acc
+    },
+    {} as Record<string, number>,
+  )
+  const availableProducts = PRODUCT_MAP.filter((p) =>
+    Object.keys(productCounts).some((k) => k.includes(p.match)),
+  )
+  if (availableProducts.length === 0) return null
+  return (
+    <PriceStatsInner
+      data={data}
+      availableProducts={availableProducts}
+      productCounts={productCounts}
+      estadisticas={estadisticas}
+    />
+  )
+}
+function PriceStatsInner({
+  data,
+  availableProducts,
+  productCounts,
+  estadisticas,
+}: {
+  data: Station[]
+  availableProducts: typeof PRODUCT_MAP
+  productCounts: Record<string, number>
+  estadisticas: EstadisticasResponse | null
+}) {
+  // Default to first non-GNC product, or first available
+  const defaultIdx = availableProducts.findIndex((p) => p.key !== 'gnc')
+  const [selectedIdx, setSelectedIdx] = useState(
+    defaultIdx >= 0 ? defaultIdx : 0,
+  )
+  const selectedProduct = availableProducts[selectedIdx] || availableProducts[0]
+  const { minPrice, maxPrice, avgPrice, count } = useMemo(() => {
+    // Try to use API estadísticas first
+    if (
+      estadisticas &&
+      estadisticas.productos &&
+      estadisticas.productos.length > 0
+    ) {
+      const productoStats = estadisticas.productos.find((p) =>
+        p.producto.includes(selectedProduct.match),
+      )
+      if (productoStats) {
+        console.log(
+          '[PriceStats] Using API stats for',
+          selectedProduct.match,
+          productoStats,
+        )
+        return {
+          minPrice: productoStats.precio_min,
+          maxPrice: productoStats.precio_max,
+          avgPrice: productoStats.precio_promedio,
+          count: productoStats.cantidad_estaciones,
+        }
+      }
+    }
+    // Fallback: calculate from local data
+    console.log(
+      '[PriceStats] Using local calculation for',
+      selectedProduct.match,
+    )
+    const prices = data
+      .filter((d) => d.producto.includes(selectedProduct.match) && d.precio > 0)
+      .map((d) => d.precio)
+    if (prices.length === 0)
+      return {
+        minPrice: 0,
+        maxPrice: 0,
+        avgPrice: 0,
+        count: 0,
+      }
+    return {
+      minPrice: Math.min(...prices),
+      maxPrice: Math.max(...prices),
+      avgPrice: prices.reduce((a, b) => a + b, 0) / prices.length,
+      count: prices.length,
+    }
+  }, [data, selectedProduct, estadisticas])
+  // Unique provinces and localidades in data
+  const provinces = useMemo(
+    () => [...new Set(data.map((d) => d.provincia))],
+    [data],
+  )
+  const localities = useMemo(
+    () => [...new Set(data.map((d) => d.localidad))],
+    [data],
+  )
+  const locationLabel =
+    localities.length === 1
+      ? `${localities[0]}, ${provinces[0]}`
+      : provinces.length === 1
+        ? provinces[0]
+        : `${provinces.length} provincias`
+  const stats = [
+    {
+      title: 'Más Bajo',
+      subtitle: `${selectedProduct.shortLabel} · ${selectedProduct.unit}`,
+      value: count > 0 ? formatCurrency(minPrice) : '—',
+      icon: TrendingDownIcon,
+      color: 'text-emerald-500',
+      bg: 'bg-emerald-500/10',
+      border: 'border-emerald-500/20',
+    },
+    {
+      title: 'Promedio',
+      subtitle: `${selectedProduct.shortLabel} · ${selectedProduct.unit}`,
+      value: count > 0 ? formatCurrency(avgPrice) : '—',
+      icon: DollarSignIcon,
+      color: 'text-amber-500',
+      bg: 'bg-amber-500/10',
+      border: 'border-amber-500/20',
+    },
+    {
+      title: 'Más Alto',
+      subtitle: `${selectedProduct.shortLabel} · ${selectedProduct.unit}`,
+      value: count > 0 ? formatCurrency(maxPrice) : '—',
+      icon: TrendingUpIcon,
+      color: 'text-red-500',
+      bg: 'bg-red-500/10',
+      border: 'border-red-500/20',
+    },
+    {
+      title: 'Estaciones',
+      subtitle: locationLabel,
+      value: data.length.toString(),
+      icon: MapPinIcon,
+      color: 'text-blue-500',
+      bg: 'bg-blue-500/10',
+      border: 'border-blue-500/20',
+    },
+  ]
+  const container = {
+    hidden: {
+      opacity: 0,
+    },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+  }
+  const item = {
+    hidden: {
+      opacity: 0,
+      y: 20,
+    },
+    show: {
+      opacity: 1,
+      y: 0,
+    },
+  }
+  return (
+    <div className="mb-6">
+      {/* Product selector */}
+      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+        {availableProducts.map((product, idx) => {
+          const isActive = idx === selectedIdx
+          return (
+            <button
+              key={product.key}
+              onClick={() => setSelectedIdx(idx)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${isActive ? `${product.bgClass} ${product.textClass} border` : 'text-slate-400 bg-slate-800/50 border border-slate-700/50 hover:text-slate-200'}`}
+              style={
+                isActive
+                  ? {
+                      borderColor: `${product.color}40`,
+                    }
+                  : undefined
+              }
+            >
+              {product.shortLabel}
+              <span className="ml-1 opacity-60">{product.unit}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Stats cards */}
+      <motion.div
+        variants={container}
+        initial="hidden"
+        animate="show"
+        key={selectedProduct.key}
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+      >
+        {stats.map((stat, i) => (
+          <motion.div
+            key={i}
+            variants={item}
+            className={`bg-slate-900/80 backdrop-blur-md border ${stat.border} rounded-xl p-5 flex items-center gap-4`}
+          >
+            <div className={`p-3 rounded-lg ${stat.bg}`}>
+              <stat.icon className={`w-6 h-6 ${stat.color}`} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-400">{stat.title}</p>
+              <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
+              <p className="text-xs text-slate-500 mt-0.5 truncate">
+                {stat.subtitle}
+              </p>
+            </div>
+          </motion.div>
+        ))}
+      </motion.div>
+    </div>
+  )
+}
+
+```
+```components/SearchFilters.tsx
+import React, { useEffect, useState } from 'react'
+import { FilterState, Station } from '../types'
+import { fetchProvincias, fetchLocalidades } from '../utils/api'
+import {
+  SearchIcon,
+  FilterIcon,
+  MapPinIcon,
+  XIcon,
+  CalendarIcon,
+  LoaderIcon,
+} from 'lucide-react'
+// Fallback lists if API endpoints aren't ready yet
+const FALLBACK_PROVINCIAS = [
+  'BUENOS AIRES',
+  'CABA',
+  'CATAMARCA',
+  'CHACO',
+  'CHUBUT',
+  'CORDOBA',
+  'CORRIENTES',
+  'ENTRE RIOS',
+  'FORMOSA',
+  'JUJUY',
+  'LA PAMPA',
+  'LA RIOJA',
+  'MENDOZA',
+  'MISIONES',
+  'NEUQUEN',
+  'RIO NEGRO',
+  'SALTA',
+  'SAN JUAN',
+  'SAN LUIS',
+  'SANTA CRUZ',
+  'SANTA FE',
+  'SANTIAGO DEL ESTERO',
+  'TIERRA DEL FUEGO',
+  'TUCUMAN',
+]
+const PRODUCTOS = [
+  'Nafta (súper) entre 92 y 95 Ron',
+  'Nafta de más de 95 Ron',
+  'Gasoil grado 2',
+  'Gasoil grado 3',
+  'GNC',
+  'Infinia',
+  'Infinia Diesel',
+]
+const EMPRESAS_COMUNES = [
+  'YPF',
+  'Shell',
+  'Axion Energy',
+  'Puma Energy',
+  'Gulf',
+  'ACA',
+  'Petrobras',
+  'Oil Combustibles',
+  'Refinor',
+  'Dapsa',
+]
+const DATE_PRESETS = [
+  {
+    label: 'Última semana',
+    days: 7,
+  },
+  {
+    label: 'Último mes',
+    days: 30,
+  },
+  {
+    label: '3 meses',
+    days: 90,
+  },
+  {
+    label: '1 año',
+    days: 365,
+  },
+  {
+    label: 'Todo',
+    days: 0,
+  },
+]
+function daysAgoISO(days: number): string {
+  if (days === 0) return ''
+  const d = new Date()
+  d.setDate(d.getDate() - days)
+  return d.toISOString().split('T')[0]
+}
+interface SearchFiltersProps {
+  filters: FilterState
+  onSearch: (filters: FilterState) => void
+  availableData: Station[]
+  loading: boolean
+}
+export function SearchFilters({
+  filters,
+  onSearch,
+  availableData,
+  loading,
+}: SearchFiltersProps) {
+  const [localFilters, setLocalFilters] = useState<FilterState>(filters)
+  const [datePreset, setDatePreset] = useState(1)
+  // Sync localFilters when parent auto-fills from ubicacion
+  useEffect(() => {
+    setLocalFilters((prev) => ({
+      ...prev,
+      provincia: filters.provincia || prev.provincia,
+      localidad: filters.localidad || prev.localidad,
+    }))
+  }, [filters.provincia, filters.localidad])
+  // Dynamic province/localidad lists from API
+  const [provincias, setProvincias] = useState<string[]>(FALLBACK_PROVINCIAS)
+  const [localidades, setLocalidades] = useState<string[]>([])
+  const [loadingLocalidades, setLoadingLocalidades] = useState(false)
+  // Fetch provinces on mount
+  useEffect(() => {
+    fetchProvincias().then((list) => {
+      if (list.length > 0) {
+        setProvincias(list.sort())
+      }
+    })
+  }, [])
+  // Fetch localidades when province changes
+  useEffect(() => {
+    if (!localFilters.provincia) {
+      setLocalidades([])
+      return
+    }
+    setLoadingLocalidades(true)
+    fetchLocalidades(localFilters.provincia).then((list) => {
+      setLocalidades(list.sort())
+      setLoadingLocalidades(false)
+    })
+  }, [localFilters.provincia])
+  // Merge empresas from loaded data with defaults
+  const empresasFromData = Array.from(
+    new Set(availableData.map((d) => d.empresa)),
+  ).filter(Boolean)
+  const allEmpresas = Array.from(
+    new Set([...EMPRESAS_COMUNES, ...empresasFromData]),
+  ).sort()
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    console.log('[SearchFilters] Submitting with localFilters:', localFilters)
+    onSearch(localFilters)
+  }
+  const handleProvinciaChange = (provincia: string) => {
+    setLocalFilters((prev) => ({
+      ...prev,
+      provincia,
+      localidad: '',
+    }))
+  }
+  const handleDatePreset = (presetIdx: number) => {
+    setDatePreset(presetIdx)
+    const fecha_desde = daysAgoISO(DATE_PRESETS[presetIdx].days)
+    setLocalFilters((prev) => ({
+      ...prev,
+      fecha_desde,
+    }))
+  }
+  const handleClearFilters = () => {
+    const cleared: FilterState = {
+      provincia: '',
+      localidad: '',
+      barrio: '',
+      empresa: '',
+      producto: '',
+      fecha_desde: daysAgoISO(30),
+    }
+    setLocalFilters(cleared)
+    setDatePreset(1)
+    console.log('[SearchFilters] Clearing filters - will use GPS')
+    onSearch(cleared)
+  }
+  const hasActiveFilters =
+    localFilters.provincia ||
+    localFilters.localidad ||
+    localFilters.empresa ||
+    localFilters.producto
+  const selectClass =
+    'w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-colors'
+  return (
+    <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-xl p-5 shadow-xl">
+      <div className="flex items-center justify-between mb-5 pb-4 border-b border-slate-800">
+        <div className="flex items-center gap-2">
+          <FilterIcon className="w-5 h-5 text-amber-500" />
+          <h2 className="text-lg font-semibold text-slate-100">
+            Filtros de Búsqueda
+          </h2>
+        </div>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={handleClearFilters}
+            className="text-xs text-slate-400 hover:text-amber-500 flex items-center gap-1 transition-colors"
+          >
+            <XIcon className="w-3 h-3" />
+            Limpiar
+          </button>
+        )}
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Vigencia */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-300 flex items-center gap-1.5">
+            <CalendarIcon className="w-4 h-4 text-slate-500" />
+            Vigencia
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {DATE_PRESETS.map((preset, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleDatePreset(idx)}
+                className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${datePreset === idx ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30' : 'text-slate-400 bg-slate-800/50 border border-slate-700/50 hover:text-slate-200'}`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          {localFilters.fecha_desde && (
+            <p className="text-xs text-slate-500 mt-1">
+              Desde:{' '}
+              {new Date(
+                localFilters.fecha_desde + 'T00:00:00',
+              ).toLocaleDateString('es-AR')}
+            </p>
+          )}
+        </div>
+
+        {/* Provincia */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-300 flex items-center gap-1.5">
+            <MapPinIcon className="w-4 h-4 text-slate-500" />
+            Provincia
+          </label>
+          <select
+            value={localFilters.provincia}
+            onChange={(e) => handleProvinciaChange(e.target.value)}
+            className={selectClass}
+          >
+            <option value="">Todas las provincias</option>
+            {provincias.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Localidad — dynamic dropdown from API */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-300 flex items-center gap-1.5">
+            Localidad
+            {loadingLocalidades && (
+              <LoaderIcon className="w-3 h-3 text-amber-500 animate-spin" />
+            )}
+          </label>
+          {localidades.length > 0 ? (
+            <select
+              value={localFilters.localidad}
+              onChange={(e) => {
+                console.log(
+                  '[SearchFilters] Localidad changed to:',
+                  e.target.value,
+                )
+                setLocalFilters({
+                  ...localFilters,
+                  localidad: e.target.value,
+                })
+              }}
+              className={selectClass}
+            >
+              <option value="">Todas las localidades</option>
+              {localidades.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              value={localFilters.localidad}
+              onChange={(e) =>
+                setLocalFilters({
+                  ...localFilters,
+                  localidad: e.target.value.toUpperCase(),
+                })
+              }
+              placeholder={
+                localFilters.provincia
+                  ? 'Cargando localidades...'
+                  : 'Elegí una provincia primero'
+              }
+              className={`${selectClass} placeholder:text-slate-500`}
+            />
+          )}
+        </div>
+
+        {/* Empresa */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-300">Empresa</label>
+          <select
+            value={localFilters.empresa}
+            onChange={(e) =>
+              setLocalFilters({
+                ...localFilters,
+                empresa: e.target.value,
+              })
+            }
+            className={selectClass}
+          >
+            <option value="">Todas las empresas</option>
+            {allEmpresas.map((e) => (
+              <option key={e} value={e}>
+                {e}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Producto */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium text-slate-300">Producto</label>
+          <select
+            value={localFilters.producto}
+            onChange={(e) =>
+              setLocalFilters({
+                ...localFilters,
+                producto: e.target.value,
+              })
+            }
+            className={selectClass}
+          >
+            <option value="">Todos los productos</option>
+            {PRODUCTOS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full mt-6 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? (
+            <div className="w-5 h-5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <SearchIcon className="w-5 h-5" />
+          )}
+          {loading ? 'Buscando...' : 'Buscar Estaciones'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
+```
+```components/StationList.tsx
+import React, { useMemo, useState } from 'react'
+import { Station, PRODUCT_MAP, getProductInfo } from '../types'
+import { formatCurrency, getCompanyColorClass } from '../utils/api'
+import {
+  MapPinIcon,
+  NavigationIcon,
+  FuelIcon,
+  CalendarIcon,
+  FlameIcon,
+  SearchIcon,
+} from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+function formatVigencia(fecha: string): string {
+  if (!fecha) return ''
+  try {
+    return new Date(fecha).toLocaleDateString('es-AR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
+  } catch {
+    return fecha
+  }
+}
+// Group stations by physical location (empresa + direccion)
+interface GroupedStation {
+  empresa: string
+  bandera?: string
+  direccion: string
+  localidad: string
+  provincia: string
+  codigo_postal?: string
+  tipo_bandera?: string
+  latitud?: number
+  longitud?: number
+  distancia?: number
+  products: {
+    producto: string
+    precio: number
+    fecha_vigencia: string
+  }[]
+}
+function groupStations(data: Station[]): GroupedStation[] {
+  const map = new Map<string, GroupedStation>()
+  for (const s of data) {
+    const key = `${s.empresa}|${s.direccion}`
+    const existing = map.get(key)
+    if (existing) {
+      // Avoid duplicate products
+      if (!existing.products.some((p) => p.producto === s.producto)) {
+        existing.products.push({
+          producto: s.producto,
+          precio: s.precio,
+          fecha_vigencia: s.fecha_vigencia,
+        })
+      }
+      // Keep shortest distance
+      if (
+        s.distancia != null &&
+        (existing.distancia == null || s.distancia < existing.distancia)
+      ) {
+        existing.distancia = s.distancia
+      }
+    } else {
+      map.set(key, {
+        empresa: s.empresa,
+        bandera: s.bandera,
+        direccion: s.direccion,
+        localidad: s.localidad,
+        provincia: s.provincia,
+        codigo_postal: s.codigo_postal,
+        tipo_bandera: s.tipo_bandera,
+        latitud: s.latitud,
+        longitud: s.longitud,
+        distancia: s.distancia,
+        products: [
+          {
+            producto: s.producto,
+            precio: s.precio,
+            fecha_vigencia: s.fecha_vigencia,
+          },
+        ],
+      })
+    }
+  }
+  return Array.from(map.values())
+}
+const FILTER_TABS = [
+  {
+    key: 'todos',
+    label: 'Todos',
+  },
+  {
+    key: 'nafta',
+    label: 'Nafta',
+    matches: ['entre 92 y 95', 'más de 95'],
+  },
+  {
+    key: 'gasoil',
+    label: 'Gasoil',
+    matches: ['Gas Oil'],
+  },
+  {
+    key: 'gnc',
+    label: 'GNC',
+    matches: ['GNC'],
+  },
+]
+interface StationListProps {
+  data: Station[]
+  selectedStation?: Station | null
+  onStationClick?: (station: Station) => void
+}
+export function StationList({
+  data,
+  selectedStation,
+  onStationClick,
+}: StationListProps) {
+  const [sortBy, setSortBy] = useState<'precio' | 'distancia' | 'fecha'>(
+    'fecha',
+  )
+  const [productFilter, setProductFilter] = useState('todos')
+  const [searchQuery, setSearchQuery] = useState('')
+  const hasDistances = data.some(
+    (d) => d.distancia !== undefined && d.distancia !== Infinity,
+  )
+  // Group stations
+  const grouped = useMemo(() => groupStations(data), [data])
+  // Tab counts (based on raw data)
+  const tabCounts = useMemo(() => {
+    return FILTER_TABS.map((tab) => ({
+      ...tab,
+      count:
+        tab.key === 'todos'
+          ? grouped.length
+          : grouped.filter((g) =>
+              g.products.some((p) =>
+                tab.matches!.some((m) => p.producto.includes(m)),
+              ),
+            ).length,
+    }))
+  }, [grouped])
+  // Filter + search + sort
+  const filtered = useMemo(() => {
+    let result = grouped
+    // Product filter
+    const activeTab = FILTER_TABS.find((t) => t.key === productFilter)
+    if (activeTab && activeTab.matches) {
+      result = result.filter((g) =>
+        g.products.some((p) =>
+          activeTab.matches!.some((m) => p.producto.includes(m)),
+        ),
+      )
+    }
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toUpperCase()
+      result = result.filter(
+        (g) =>
+          g.empresa.toUpperCase().includes(q) ||
+          g.direccion.toUpperCase().includes(q) ||
+          g.localidad.toUpperCase().includes(q),
+      )
+    }
+    // Sort
+    return [...result].sort((a, b) => {
+      if (sortBy === 'distancia' && hasDistances) {
+        return (a.distancia || Infinity) - (b.distancia || Infinity)
+      }
+      if (sortBy === 'precio') {
+        // Sort by cheapest product price
+        const aMin = Math.min(...a.products.map((p) => p.precio))
+        const bMin = Math.min(...b.products.map((p) => p.precio))
+        return aMin - bMin
+      }
+      // Default: sort by most recent fecha_vigencia
+      const aDate = a.products[0]?.fecha_vigencia
+        ? new Date(a.products[0].fecha_vigencia).getTime()
+        : 0
+      const bDate = b.products[0]?.fecha_vigencia
+        ? new Date(b.products[0].fecha_vigencia).getTime()
+        : 0
+      return bDate - aDate // Most recent first
+    })
+  }, [grouped, productFilter, searchQuery, sortBy, hasDistances])
+  if (data.length === 0) {
+    return (
+      <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-xl p-8 text-center">
+        <FuelIcon className="w-12 h-12 text-slate-700 mx-auto mb-3" />
+        <p className="text-slate-400">No se encontraron estaciones</p>
+        <p className="text-slate-500 text-sm mt-1">
+          Probá cambiar los filtros de búsqueda
+        </p>
+      </div>
+    )
+  }
+  return (
+    <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-xl p-5">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <MapPinIcon className="w-5 h-5 text-amber-500" />
+          <h2 className="text-lg font-semibold text-slate-100">
+            Estaciones ({filtered.length})
+          </h2>
+        </div>
+        <div className="flex bg-slate-800 p-0.5 rounded-md">
+          <button
+            onClick={() => setSortBy('fecha')}
+            className={`px-3 py-1 text-xs font-medium rounded transition-colors ${sortBy === 'fecha' ? 'bg-amber-500/20 text-amber-500' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            Fecha
+          </button>
+          <button
+            onClick={() => setSortBy('precio')}
+            className={`px-3 py-1 text-xs font-medium rounded transition-colors ${sortBy === 'precio' ? 'bg-amber-500/20 text-amber-500' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            Precio
+          </button>
+          {hasDistances && (
+            <button
+              onClick={() => setSortBy('distancia')}
+              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${sortBy === 'distancia' ? 'bg-amber-500/20 text-amber-500' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              Distancia
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative mb-3">
+        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Buscar por nombre o dirección..."
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg pl-9 pr-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-colors"
+        />
+      </div>
+
+      {/* Product filter tabs */}
+      <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
+        {tabCounts
+          .filter((t) => t.count > 0 || t.key === 'todos')
+          .map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setProductFilter(tab.key)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${productFilter === tab.key ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30' : 'text-slate-400 bg-slate-800/50 border border-slate-700/50 hover:text-slate-200'}`}
+            >
+              {tab.label}
+              <span className="ml-1 opacity-60">({tab.count})</span>
+            </button>
+          ))}
+      </div>
+
+      {/* Station cards */}
+      <div className="space-y-3 max-h-[550px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+        {filtered.map((station, idx) => (
+          <StationCard
+            key={`${station.empresa}-${station.direccion}-${idx}`}
+            station={station}
+            idx={idx}
+            selectedStation={selectedStation}
+            onStationClick={onStationClick}
+            data={data}
+          />
+        ))}
+        {filtered.length === 0 && (
+          <div className="py-8 text-center">
+            <p className="text-slate-500 text-sm">
+              No hay resultados para "{searchQuery}"
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+// Individual station card with multi-product support
+function StationCard({
+  station,
+  idx,
+  selectedStation,
+  onStationClick,
+  data,
+}: {
+  station: GroupedStation
+  idx: number
+  selectedStation?: Station | null
+  onStationClick?: (station: Station) => void
+  data: Station[]
+}) {
+  const [activeProductIdx, setActiveProductIdx] = useState(0)
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null)
+  // Sort products: liquid fuels first, GNC last
+  const sortedProducts = useMemo(() => {
+    return [...station.products].sort((a, b) => {
+      const aGnc = a.producto.includes('GNC') ? 1 : 0
+      const bGnc = b.producto.includes('GNC') ? 1 : 0
+      if (aGnc !== bGnc) return aGnc - bGnc
+      return a.precio - b.precio
+    })
+  }, [station.products])
+  const displayIdx = hoveredIdx !== null ? hoveredIdx : activeProductIdx
+  const displayProduct = sortedProducts[displayIdx] || sortedProducts[0]
+  const productInfo = getProductInfo(displayProduct.producto)
+  const isGncOnly =
+    sortedProducts.length === 1 && sortedProducts[0].producto.includes('GNC')
+  const isSelected = selectedStation
+    ? station.empresa === selectedStation.empresa &&
+      station.direccion === selectedStation.direccion
+    : false
+  const handleClick = () => {
+    // Find the matching raw Station record
+    const raw = data.find(
+      (s) =>
+        s.empresa === station.empresa &&
+        s.direccion === station.direccion &&
+        s.producto === displayProduct.producto,
+    )
+    if (raw && onStationClick) onStationClick(raw)
+  }
+  const handleProductClick = (e: React.MouseEvent, pIdx: number) => {
+    e.stopPropagation()
+    setActiveProductIdx(pIdx)
+    // Also trigger map navigation with this product
+    const prod = sortedProducts[pIdx]
+    const raw = data.find(
+      (s) =>
+        s.empresa === station.empresa &&
+        s.direccion === station.direccion &&
+        s.producto === prod.producto,
+    )
+    if (raw && onStationClick) onStationClick(raw)
+  }
+  return (
+    <motion.div
+      initial={{
+        opacity: 0,
+        y: 20,
+      }}
+      animate={{
+        opacity: 1,
+        y: 0,
+      }}
+      transition={{
+        delay: Math.min(idx * 0.03, 0.4),
+      }}
+      onClick={handleClick}
+      className={`bg-slate-950 border rounded-lg p-4 transition-all cursor-pointer ${isSelected ? 'border-amber-500/50 ring-1 ring-amber-500/20 bg-amber-500/5' : 'border-slate-800 hover:border-slate-600'}`}
+    >
+      {/* Top row: company + price */}
+      <div className="flex justify-between items-start mb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div
+            className={`w-3 h-3 rounded-full flex-shrink-0 ${getCompanyColorClass(station.empresa || '')}`}
+          />
+          <h3 className="font-bold text-slate-200 truncate">
+            {station.bandera || station.empresa}
+          </h3>
+          {isGncOnly && (
+            <span className="flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <FlameIcon className="w-2.5 h-2.5" />
+              Solo GNC
+            </span>
+          )}
+          {station.tipo_bandera && station.tipo_bandera !== 'PROPIA' && (
+            <span className="flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-800 text-slate-500">
+              {station.tipo_bandera}
+            </span>
+          )}
+        </div>
+        <div className="text-right flex-shrink-0 ml-2">
+          <AnimatePresence mode="wait">
+            <motion.span
+              key={displayProduct.producto}
+              initial={{
+                opacity: 0,
+                y: -4,
+              }}
+              animate={{
+                opacity: 1,
+                y: 0,
+              }}
+              exit={{
+                opacity: 0,
+                y: 4,
+              }}
+              transition={{
+                duration: 0.15,
+              }}
+              className="text-xl font-bold text-emerald-400 block leading-none"
+            >
+              {formatCurrency(displayProduct.precio)}
+            </motion.span>
+          </AnimatePresence>
+          <span className="text-[10px] text-slate-500 font-medium">
+            {productInfo.unit}
+          </span>
+        </div>
+      </div>
+
+      {/* Address */}
+      <div className="text-sm text-slate-400 mb-3">
+        <p className="truncate">{station.direccion}</p>
+        <p className="text-slate-500">
+          {station.localidad}, {station.provincia}
+          {station.codigo_postal && (
+            <span className="ml-1 text-slate-600">
+              ({station.codigo_postal})
+            </span>
+          )}
+        </p>
+      </div>
+
+      {/* Product badges — clickable */}
+      <div className="flex flex-wrap gap-1.5 pt-3 border-t border-slate-800/50">
+        {sortedProducts.map((prod, pIdx) => {
+          const info = getProductInfo(prod.producto)
+          const isActive = pIdx === activeProductIdx
+          const isHovered = pIdx === hoveredIdx
+          return (
+            <button
+              key={prod.producto}
+              onClick={(e) => handleProductClick(e, pIdx)}
+              onMouseEnter={() => setHoveredIdx(pIdx)}
+              onMouseLeave={() => setHoveredIdx(null)}
+              className={`group relative inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all border ${isActive ? `${info.bgClass} ${info.textClass}` : isHovered ? `bg-slate-800 ${info.textClass}` : 'bg-slate-800/50 text-slate-400 border-slate-700/50'}`}
+              style={{
+                borderColor:
+                  isActive || isHovered ? `${info.color}40` : undefined,
+              }}
+            >
+              <span
+                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                style={{
+                  backgroundColor: info.color,
+                }}
+              />
+              {info.shortLabel}
+              <span
+                className={`font-bold transition-opacity ${isActive || isHovered ? 'opacity-100' : 'opacity-50'}`}
+              >
+                {formatCurrency(prod.precio)}
+              </span>
+            </button>
+          )
+        })}
+
+        {/* Metadata on the right */}
+        <div className="flex items-center gap-3 ml-auto">
+          {displayProduct.fecha_vigencia && (
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 text-xs text-slate-500">
+                <CalendarIcon className="w-3 h-3" />
+                {formatVigencia(displayProduct.fecha_vigencia)}
+              </div>
+              {(() => {
+                const dias =
+                  (Date.now() -
+                    new Date(displayProduct.fecha_vigencia).getTime()) /
+                  86400000
+                if (dias > 365) {
+                  return (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/20 text-red-400 border border-red-500/30">
+                      {Math.floor(dias / 365)} año
+                      {Math.floor(dias / 365) > 1 ? 's' : ''}
+                    </span>
+                  )
+                } else if (dias > 60) {
+                  return (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      {Math.floor(dias / 30)} mes
+                      {Math.floor(dias / 30) > 1 ? 'es' : ''}
+                    </span>
+                  )
+                }
+                return null
+              })()}
+            </div>
+          )}
+          {station.distancia !== undefined &&
+            station.distancia !== Infinity && (
+              <div className="flex items-center gap-1 text-xs text-slate-400">
+                <NavigationIcon className="w-3 h-3" />
+                {station.distancia < 1
+                  ? `${Math.round(station.distancia * 1000)} m`
+                  : `${station.distancia.toFixed(1)} km`}
+              </div>
+            )}
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+```
+```hooks/useFuelData.ts
+import { useState, useEffect, useCallback, useRef } from 'react'
+import {
+  Station,
+  FilterState,
+  FuelDataState,
+  UbicacionResuelta,
+} from '../types'
+import {
+  fetchSmartData,
+  fetchFuelData,
+  SmartResult,
+  FetchResult,
+  clearCache,
+} from '../utils/api'
+import { useGeolocation } from './useGeolocation'
+
+interface UseFuelDataReturn extends FuelDataState {
+  filters: FilterState
+  updateFilters: (newFilters: Partial<FilterState>) => void
+  search: (newFilters: FilterState) => void
+  refresh: () => void
+  userLocation: ReturnType<typeof useGeolocation>
+  totalRecords: number
+  source: string
+  ubicacion: UbicacionResuelta | null
+}
+
+export function useFuelData(initialFilters: FilterState): UseFuelDataReturn {
+  const [filters, setFilters] = useState<FilterState>(initialFilters)
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [source, setSource] = useState<string>('')
+  const [ubicacion, setUbicacion] = useState<UbicacionResuelta | null>(null)
+  const [state, setState] = useState<FuelDataState>({
+    data: [],
+    loading: true,
+    error: null,
+    isUsingFallback: false,
+  })
+
+  const location = useGeolocation()
+  const mountedRef = useRef(true)
+  const requestIdRef = useRef(0)
+
+  const loadData = useCallback(
+    async (
+      currentFilters: FilterState,
+      gpsLat?: number | null,
+      gpsLon?: number | null,
+    ) => {
+      // "Latest wins" — each call gets an ID, only the latest updates state
+      const thisRequestId = ++requestIdRef.current
+
+      setState((prev) => ({ ...prev, loading: true, error: null }))
+
+      try {
+        // Primary: use /precios/smart — it handles GPS, IP, and fallback cascading
+        // IMPORTANT: Only send lat/lon if explicitly provided (not when using provincia/localidad)
+        const hasManualLocation =
+          currentFilters.provincia && currentFilters.localidad
+        const smartResult: SmartResult = await fetchSmartData({
+          lat: hasManualLocation ? undefined : (gpsLat ?? location.lat),
+          lon: hasManualLocation ? undefined : (gpsLon ?? location.lon),
+          provincia: currentFilters.provincia || undefined,
+          localidad: currentFilters.localidad || undefined,
+          barrio: currentFilters.barrio || undefined,
+          producto: currentFilters.producto || undefined,
+          fecha_desde: currentFilters.fecha_desde || undefined,
+          radio_km: 15,
+          limit: 500,
+        })
+
+        // Discard if a newer request was fired while this one was in flight
+        if (!mountedRef.current || thisRequestId !== requestIdRef.current)
+          return
+
+        let data = smartResult.data
+
+        // Client-side filter: only empresa (API handles provincia/localidad/producto)
+        if (currentFilters.empresa) {
+          data = data.filter((s) =>
+            s.empresa
+              .toUpperCase()
+              .includes(currentFilters.empresa.toUpperCase()),
+          )
+        }
+
+        // Sort: by distance if available, otherwise by price
+        const sorted = [...data].sort((a, b) => {
+          if (a.distancia != null && b.distancia != null) {
+            return a.distancia - b.distancia
+          }
+          return a.precio - b.precio
+        })
+
+        setState({
+          data: sorted,
+          loading: false,
+          error: smartResult.error || null,
+          isUsingFallback: smartResult.isFallback,
+        })
+        setTotalRecords(smartResult.total)
+        setSource(smartResult.source)
+        setUbicacion(smartResult.ubicacion)
+
+        // Auto-fill provincia and localidad from ubicacion
+        // ONLY if: user hasn't manually selected them AND location is precise (GPS, not IP)
+        if (
+          smartResult.ubicacion &&
+          !currentFilters.provincia &&
+          !currentFilters.localidad &&
+          !smartResult.ubicacion.ubicacion_aproximada
+        ) {
+          const ub = smartResult.ubicacion
+          const provStr =
+            (typeof ub.provincia === 'string' ? ub.provincia : '') || ''
+          const locDatasetStr =
+            (typeof ub.localidad_dataset === 'string'
+              ? ub.localidad_dataset
+              : '') || ''
+
+          setFilters((prev) => ({
+            ...prev,
+            provincia: provStr ? provStr.toUpperCase() : prev.provincia,
+            localidad: locDatasetStr
+              ? locDatasetStr.toUpperCase()
+              : prev.localidad,
+          }))
+        }
+      } catch (err: any) {
+        if (!mountedRef.current || thisRequestId !== requestIdRef.current)
+          return
+        if (err.name === 'AbortError') return
+
+        setState((prev) => ({
+          ...prev,
+          loading: false,
+          error: err.message || 'Error desconocido al cargar datos',
+        }))
+      }
+    },
+    [location.lat, location.lon],
+  )
+
+  // Initial load — wait for GPS, then load
+  const initialLoadDone = useRef(false)
+  const gpsLoadedRef = useRef(false)
+
+  useEffect(() => {
+    // GPS arrived
+    if (location.lat !== null && location.lon !== null) {
+      if (!initialLoadDone.current) {
+        // First load with GPS
+        initialLoadDone.current = true
+        gpsLoadedRef.current = true
+        console.log(
+          '[useFuelData] Initial load WITH GPS:',
+          location.lat,
+          location.lon,
+        )
+        loadData(filters, location.lat, location.lon)
+      } else if (!gpsLoadedRef.current) {
+        // GPS arrived after initial IP-based load — reload with GPS
+        gpsLoadedRef.current = true
+        const hasManualLocation =
+          filters.provincia && filters.provincia.trim() !== ''
+        if (!hasManualLocation) {
+          console.log(
+            '[useFuelData] GPS arrived late — reloading with coordinates',
+          )
+          loadData(filters, location.lat, location.lon)
+        }
+      }
+    }
+  }, [location.lat, location.lon]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fallback: if GPS doesn't arrive in 4s, load without it
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!initialLoadDone.current) {
+        initialLoadDone.current = true
+        console.log('[useFuelData] GPS timeout (4s) — loading without GPS')
+        loadData(filters)
+      }
+    }, 4000)
+    return () => clearTimeout(timer)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  const updateFilters = (newFilters: Partial<FilterState>) => {
+    setFilters((prev) => ({ ...prev, ...newFilters }))
+  }
+
+  const search = (newFilters: FilterState) => {
+    console.log('[useFuelData] SEARCH called with filters:', newFilters)
+    // Clear cache to force fresh API call
+    clearCache()
+    setFilters(newFilters)
+
+    // If user selected provincia/localidad, DON'T send GPS (let backend use location filters)
+    // Check for both empty string and null/undefined
+    const hasProvincia =
+      newFilters.provincia && newFilters.provincia.trim() !== ''
+    const hasLocalidad =
+      newFilters.localidad && newFilters.localidad.trim() !== ''
+    const useGPS = !hasProvincia && !hasLocalidad
+    const lat = useGPS ? location.lat : null
+    const lon = useGPS ? location.lon : null
+
+    console.log(
+      '[useFuelData] Has provincia:',
+      hasProvincia,
+      'Has localidad:',
+      hasLocalidad,
+    )
+    console.log('[useFuelData] Using GPS:', useGPS, 'lat:', lat, 'lon:', lon)
+    loadData(newFilters, lat, lon)
+  }
+
+  const refresh = () => {
+    console.log('[useFuelData] REFRESH called')
+    loadData(filters, location.lat, location.lon)
+  }
+
+  return {
+    ...state,
+    filters,
+    updateFilters,
+    search,
+    refresh,
+    userLocation: location,
+    totalRecords,
+    source,
+    ubicacion,
+  }
+}
+
+```
+```hooks/useGeolocation.ts
+import { useState, useEffect } from 'react'
+
+interface LocationState {
+  lat: number | null
+  lon: number | null
+  error: string | null
+  loading: boolean
+}
+
+export function useGeolocation() {
+  const [location, setLocation] = useState<LocationState>({
+    lat: null,
+    lon: null,
+    error: null,
+    loading: true,
+  })
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocation((prev) => ({
+        ...prev,
+        error: 'Geolocalización no soportada',
+        loading: false,
+      }))
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocation({
+          lat: position.coords.latitude,
+          lon: position.coords.longitude,
+          error: null,
+          loading: false,
+        })
+      },
+      (error) => {
+        setLocation((prev) => ({
+          ...prev,
+          error: 'No se pudo obtener la ubicación',
+          loading: false,
+        }))
+      },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 },
+    )
+  }, [])
+
+  return location
+}
+
+```
+```index.css
+/* @import url() FONT IMPORTS MUST ALWAYS BE AT THE VERY TOP OF THIS FILE, ABOVE THE TAILWIND IMPORTS — DO NOT DELETE THIS COMMENT */
+
+/* CRITICAL: THE FOLLOWING TAILWIND IMPORTS MUST NEVER BE DELETED OR REORDERED — DO NOT DELETE THIS COMMENT */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* END TAILWIND IMPORTS — ALL OTHER CSS MUST GO BELOW THIS LINE */
+
+/* Custom scrollbar for dark theme */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+/* Leaflet container fix */
+.leaflet-container {
+  z-index: 0;
+  font-family: inherit;
+}
+/* Leaflet custom marker reset */
+.custom-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+```
+```index.tsx
+import "./index.css";
+import React from "react";
+import { render } from "react-dom";
+import { App } from "./App";
+
+render(<App />, document.getElementById("root"));
+
+```
+```pages/Dashboard.tsx
+import React, { useEffect, useMemo, useState, Component } from 'react'
+import { Station, UbicacionResuelta } from '../types'
+import { Header } from '../components/Header'
+import { SearchFilters } from '../components/SearchFilters'
+import { PriceStats } from '../components/PriceStats'
+import { StationList } from '../components/StationList'
+import { PriceChart } from '../components/PriceChart'
+import { FuelMap } from '../components/FuelMap'
+import { PriceCalculator } from '../components/PriceCalculator'
+import { useFuelData } from '../hooks/useFuelData'
+import {
+  AlertTriangleIcon,
+  InfoIcon,
+  MapIcon,
+  ListIcon,
+  WifiIcon,
+  WifiOffIcon,
+  DatabaseIcon,
+  MapPinIcon,
+  LocateIcon,
+  GlobeIcon,
+  CompassIcon,
+} from 'lucide-react'
+// ErrorBoundary to prevent Leaflet crashes from taking down the whole app
+class MapErrorBoundary extends Component<
+  {
+    children: React.ReactNode
+  },
+  {
+    hasError: boolean
+  }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props)
+    this.state = {
+      hasError: false,
+    }
+  }
+  static getDerivedStateFromError() {
+    return {
+      hasError: true,
+    }
+  }
+  componentDidCatch(error: Error) {
+    console.warn('[MapErrorBoundary] Leaflet error caught:', error.message)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="bg-slate-900/80 backdrop-blur-md border border-slate-800 rounded-xl h-[600px] flex flex-col items-center justify-center gap-4">
+          <MapPinIcon className="w-12 h-12 text-slate-600" />
+          <p className="text-slate-400 text-sm">Error al cargar el mapa</p>
+          <button
+            onClick={() =>
+              this.setState({
+                hasError: false,
+              })
+            }
+            className="text-xs text-amber-500 hover:text-amber-400 underline"
+          >
+            Reintentar
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+function LocationBanner({
+  ubicacion,
+}: {
+  ubicacion: UbicacionResuelta | null
+}) {
+  if (!ubicacion) return null
+  const configs: Record<
+    string,
+    {
+      icon: React.ElementType
+      label: string
+      color: string
+      bg: string
+      border: string
+    }
+  > = {
+    gps: {
+      icon: LocateIcon,
+      label: 'Ubicación exacta por GPS',
+      color: 'text-emerald-400',
+      bg: 'bg-emerald-500/5',
+      border: 'border-emerald-500/20',
+    },
+    ip_cache: {
+      icon: GlobeIcon,
+      label: 'Ubicación detectada por IP',
+      color: 'text-amber-400',
+      bg: 'bg-amber-500/5',
+      border: 'border-amber-500/20',
+    },
+    ip_geo: {
+      icon: GlobeIcon,
+      label: 'Ubicación detectada por IP',
+      color: 'text-amber-400',
+      bg: 'bg-amber-500/5',
+      border: 'border-amber-500/20',
+    },
+    localidad: {
+      icon: MapPinIcon,
+      label: 'Por localidad',
+      color: 'text-blue-400',
+      bg: 'bg-blue-500/5',
+      border: 'border-blue-500/20',
+    },
+    provincia: {
+      icon: CompassIcon,
+      label: 'Por provincia',
+      color: 'text-blue-400',
+      bg: 'bg-blue-500/5',
+      border: 'border-blue-500/20',
+    },
+    default: {
+      icon: MapPinIcon,
+      label: 'Ubicación por defecto',
+      color: 'text-slate-400',
+      bg: 'bg-slate-500/5',
+      border: 'border-slate-500/20',
+    },
+  }
+  const config = configs[ubicacion.method] || configs.default
+  const Icon = config.icon
+  // Build location text — show "LA REJA (zona MORENO)" when detected ≠ dataset
+  const detected = ubicacion.localidad_detectada
+  const dataset = ubicacion.localidad_dataset || ubicacion.localidad
+  let localidadText = ''
+  if (detected && dataset && detected.toUpperCase() !== dataset.toUpperCase()) {
+    localidadText = `${detected} (zona ${dataset})`
+  } else {
+    localidadText = dataset || detected || ''
+  }
+  const locationText = [localidadText, ubicacion.provincia]
+    .filter(Boolean)
+    .join(', ')
+  return (
+    <div
+      className={`mb-4 flex items-center flex-wrap gap-x-2.5 gap-y-1 px-4 py-2.5 rounded-lg border text-sm ${config.bg} ${config.border}`}
+    >
+      <Icon className={`w-4 h-4 flex-shrink-0 ${config.color}`} />
+      <span className={`font-medium ${config.color}`}>{config.label}</span>
+      {locationText && (
+        <>
+          <span className="text-slate-600">→</span>
+          <span className="text-slate-200 font-medium">{locationText}</span>
+        </>
+      )}
+    </div>
+  )
+}
+export function Dashboard() {
+  const {
+    data,
+    loading,
+    error,
+    isUsingFallback,
+    filters,
+    search,
+    refresh,
+    totalRecords,
+    source,
+    ubicacion,
+  } = useFuelData({
+    provincia: '',
+    localidad: '',
+    barrio: '',
+    empresa: '',
+    producto: '',
+    fecha_desde: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0],
+  })
+  const [mobileView, setMobileView] = useState<'map' | 'list'>('list')
+  const [selectedStation, setSelectedStation] = useState<Station | null>(null)
+  // Don't mount Leaflet map until it's actually visible (prevents _leaflet_pos crash)
+  const [mapMounted, setMapMounted] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    if (mq.matches || mobileView === 'map') {
+      setMapMounted(true)
+    }
+    const handler = (e: MediaQueryListEvent) => {
+      if (e.matches) setMapMounted(true)
+    }
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [mobileView])
+  const handleStationClick = (station: Station) => {
+    setSelectedStation(station)
+    if (window.innerWidth < 1024) {
+      setMobileView('map')
+    }
+  }
+  // Check if all stations have stale prices
+  const allStale = useMemo(() => {
+    if (data.length === 0) return false
+    return data.every((station) => station.precio_vigente === false)
+  }, [data])
+  const sourceLabel =
+    source === 'api-smart'
+      ? 'API Smart'
+      : source === 'api'
+        ? 'API Render'
+        : source === 'local-fallback'
+          ? 'Datos Locales'
+          : ''
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-amber-500/30">
+      <Header />
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Location Banner */}
+        {!loading && <LocationBanner ubicacion={ubicacion} />}
+
+        {/* API Warnings */}
+        {!loading && ubicacion?.advertencia_fecha && (
+          <div className="mb-4 bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5 flex items-start gap-3 text-sm">
+            <AlertTriangleIcon className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+            <span className="text-amber-400">
+              {ubicacion.advertencia_fecha}
+            </span>
+          </div>
+        )}
+        {!loading && ubicacion?.radio_ampliado && (
+          <div className="mb-4 bg-blue-500/10 border border-blue-500/20 rounded-lg px-4 py-2.5 flex items-start gap-3 text-sm">
+            <AlertTriangleIcon className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+            <span className="text-blue-400">
+              Radio ampliado: no se encontraron estaciones cercanas, mostrando
+              resultados más lejanos
+            </span>
+          </div>
+        )}
+        {!loading && ubicacion?.method === 'ip_geo' && (
+          <div className="mb-4 bg-slate-500/10 border border-slate-500/20 rounded-lg px-4 py-2.5 flex items-start gap-3 text-sm">
+            <MapPinIcon className="w-4 h-4 text-slate-400 flex-shrink-0 mt-0.5" />
+            <span className="text-slate-400">
+              Ubicación aproximada por IP. Permite el acceso GPS para resultados
+              más precisos.
+            </span>
+          </div>
+        )}
+
+        {/* Connection Status Bar */}
+        {source && !loading && (
+          <div
+            className={`mb-4 flex items-center justify-between px-4 py-2.5 rounded-lg border text-sm ${isUsingFallback ? 'bg-amber-500/5 border-amber-500/20' : 'bg-emerald-500/5 border-emerald-500/20'}`}
+          >
+            <div className="flex items-center gap-2">
+              {isUsingFallback ? (
+                <WifiOffIcon className="w-4 h-4 text-amber-500" />
+              ) : (
+                <WifiIcon className="w-4 h-4 text-emerald-500" />
+              )}
+              <span
+                className={
+                  isUsingFallback ? 'text-amber-400' : 'text-emerald-400'
+                }
+              >
+                Fuente: {sourceLabel}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-slate-400">
+              <DatabaseIcon className="w-3.5 h-3.5" />
+              <span>
+                {totalRecords.toLocaleString('es-AR')} registros disponibles
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Error Alert */}
+        {error && isUsingFallback && (
+          <div className="mb-6 bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-start gap-3">
+            <AlertTriangleIcon className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-red-400 font-medium">
+                No se pudo conectar a la API
+              </h3>
+              <p className="text-red-400/70 text-sm mt-1 leading-relaxed">
+                No se pudo conectar a la API en Render. Puede estar en cold
+                start (esperar ~30s) o caída. Mostrando datos de ejemplo
+                locales.
+              </p>
+              <button
+                onClick={refresh}
+                className="mt-3 text-sm bg-red-500/20 hover:bg-red-500/30 text-red-400 px-4 py-1.5 rounded-md transition-colors font-medium"
+              >
+                Reintentar conexión
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isUsingFallback && !error && (
+          <div className="mb-6 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex items-center gap-3">
+            <InfoIcon className="w-5 h-5 text-blue-400 flex-shrink-0" />
+            <p className="text-blue-400/90 text-sm">
+              Conexión a la API no disponible. Mostrando datos de ejemplo
+              locales.
+            </p>
+          </div>
+        )}
+
+        {/* Global Stale Prices Warning */}
+        {allStale && data.length > 0 && !loading && (
+          <div className="mb-6 bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-start gap-3">
+            <AlertTriangleIcon className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-amber-400 font-semibold text-sm mb-1">
+                ⚠️ Todos los precios están desactualizados
+              </h3>
+              <p className="text-amber-400/80 text-sm leading-relaxed">
+                Todas las estaciones mostradas tienen precios anteriores a la
+                fecha solicitada. Los datos pueden no reflejar los precios
+                actuales del mercado.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Left Sidebar */}
+          <div className="w-full lg:w-80 flex-shrink-0 space-y-6">
+            <SearchFilters
+              filters={filters}
+              onSearch={search}
+              availableData={data}
+              loading={loading}
+            />
+            <PriceCalculator data={data} />
+          </div>
+
+          {/* Main Content */}
+          <div className="flex-1 min-w-0">
+            {/* Banner de ubicación aproximada */}
+            {ubicacion?.ubicacion_aproximada && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-amber-500 text-lg">⚠️</span>
+                  <div>
+                    <p className="text-amber-400 text-sm font-medium">
+                      Ubicación aproximada (por IP)
+                    </p>
+                    <p className="text-slate-400 text-xs">
+                      {ubicacion.sugerencia ||
+                        'La ubicación puede no ser precisa. Activá el GPS para mejores resultados.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Advertencia de fecha */}
+            {ubicacion?.advertencia_fecha && data.length === 0 && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mb-4">
+                <p className="text-blue-400 text-sm">
+                  {ubicacion.advertencia_fecha}
+                </p>
+              </div>
+            )}
+
+            {loading && data.length === 0 ? (
+              <div className="h-full min-h-[400px] flex flex-col items-center justify-center space-y-4">
+                <div className="w-10 h-10 border-4 border-slate-800 border-t-amber-500 rounded-full animate-spin"></div>
+                <p className="text-slate-400 font-medium animate-pulse">
+                  Conectando con la API...
+                </p>
+                <p className="text-slate-500 text-sm">
+                  Si es la primera vez, Render puede tardar ~30s en arrancar
+                </p>
+              </div>
+            ) : (
+              <>
+                <PriceStats
+                  data={data}
+                  filters={filters}
+                  ubicacion={ubicacion}
+                />
+                <PriceChart data={data} />
+
+                {/* Mobile View Toggle */}
+                <div className="lg:hidden flex bg-slate-900 p-1 rounded-lg border border-slate-800 mb-4">
+                  <button
+                    onClick={() => setMobileView('list')}
+                    className={`flex-1 py-2 text-sm font-medium rounded-md flex items-center justify-center gap-2 ${mobileView === 'list' ? 'bg-amber-500/20 text-amber-500' : 'text-slate-400'}`}
+                  >
+                    <ListIcon className="w-4 h-4" /> Lista
+                  </button>
+                  <button
+                    onClick={() => setMobileView('map')}
+                    className={`flex-1 py-2 text-sm font-medium rounded-md flex items-center justify-center gap-2 ${mobileView === 'map' ? 'bg-amber-500/20 text-amber-500' : 'text-slate-400'}`}
+                  >
+                    <MapIcon className="w-4 h-4" /> Mapa
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div
+                    className={`lg:block ${mobileView === 'list' ? 'block' : 'hidden'}`}
+                  >
+                    <StationList
+                      data={data}
+                      selectedStation={selectedStation}
+                      onStationClick={handleStationClick}
+                    />
+                  </div>
+                  <div
+                    className={`lg:block ${mobileView === 'map' ? 'block' : 'hidden'}`}
+                  >
+                    {mapMounted && (
+                      <MapErrorBoundary>
+                        <FuelMap
+                          data={data}
+                          selectedStation={selectedStation}
+                        />
+                      </MapErrorBoundary>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+```
+```tailwind.config.js
+export default {}
+```
+```types/index.ts
+export interface Station {
+  empresa: string
+  razon_social?: string
+  bandera?: string
+  tipo_bandera?: string
+  numero_establecimiento?: string
+  calle?: string
+  numero?: string
+  direccion: string
+  localidad: string
+  provincia: string
+  codigo_postal?: string
+  latitud?: number
+  longitud?: number
+  producto: string
+  precio: number
+  fecha_vigencia: string
+  precio_vigente?: boolean
+  distancia?: number
+}
+
+export interface FilterState {
+  provincia: string
+  localidad: string
+  barrio: string
+  empresa: string
+  producto: string
+  fecha_desde: string
+}
+
+export interface UbicacionResuelta {
+  method: 'gps' | 'ip_cache' | 'ip_geo' | 'localidad' | 'provincia' | 'default'
+  precision: 'exacta' | 'aproximada' | 'localidad' | 'provincia' | 'default'
+  lat: number | null
+  lon: number | null
+  localidad?: string | null
+  provincia?: string | null
+  geocoded?: true | null
+  localidad_detectada?: string | null
+  localidad_dataset?: string | null
+  distancia_dataset_km?: number | null
+  advertencia_fecha?: string | null
+  radio_ampliado?: true | null
+  provincia_ajustada?: string | null
+  nota?: string | null
+  ubicacion_aproximada?: boolean
+  sugerencia?: string | null
+}
+
+export interface SmartAPIResponse {
+  ubicacion_resuelta: UbicacionResuelta
+  total: number
+  estaciones: RenderStation[]
+}
+
+export interface RenderAPIResponse {
+  total: number
+  estaciones: RenderStation[]
+}
+
+export interface RenderStation {
+  empresa: string
+  razon_social?: string
+  bandera?: string
+  tipo_bandera?: string
+  numero_establecimiento?: string
+  calle?: string
+  numero?: string
+  direccion: string
+  localidad: string
+  provincia: string
+  codigo_postal?: string
+  latitud?: number
+  longitud?: number
+  producto: string
+  precio: number
+  fecha_vigencia: string
+  precio_vigente?: boolean
+  distancia_km?: number
+}
+
+export interface DatasetInfo {
+  dataset: string
+  fuente: string
+  last_modified: string
+}
+
+export interface FuelDataState {
+  data: Station[]
+  loading: boolean
+  error: string | null
+  isUsingFallback: boolean
+}
+
+// ─── Product Helpers ─────────────────────────────────────────────────
+export interface ProductInfo {
+  key: ProductKey
+  label: string
+  shortLabel: string
+  unit: string
+  match: string
+  color: string
+  bgClass: string
+  textClass: string
+}
+
+export type ProductKey =
+  | 'gnc'
+  | 'nafta_super'
+  | 'nafta_premium'
+  | 'gasoil_g2'
+  | 'gasoil_g3'
+  | 'infinia'
+  | 'infinia_diesel'
+
+export const PRODUCT_MAP: ProductInfo[] = [
+  {
+    key: 'nafta_super',
+    label: 'Nafta Súper',
+    shortLabel: 'Súper',
+    unit: '$/L',
+    match: 'entre 92 y 95',
+    color: '#3b82f6',
+    bgClass: 'bg-blue-500/15',
+    textClass: 'text-blue-400',
+  },
+  {
+    key: 'nafta_premium',
+    label: 'Nafta Premium',
+    shortLabel: 'Premium',
+    unit: '$/L',
+    match: 'más de 95',
+    color: '#8b5cf6',
+    bgClass: 'bg-violet-500/15',
+    textClass: 'text-violet-400',
+  },
+  {
+    key: 'gasoil_g2',
+    label: 'Gasoil Grado 2',
+    shortLabel: 'Gasoil G2',
+    unit: '$/L',
+    match: 'Gasoil grado 2',
+    color: '#f97316',
+    bgClass: 'bg-orange-500/15',
+    textClass: 'text-orange-400',
+  },
+  {
+    key: 'gasoil_g3',
+    label: 'Gasoil Grado 3',
+    shortLabel: 'Gasoil G3',
+    unit: '$/L',
+    match: 'Gasoil grado 3',
+    color: '#ef4444',
+    bgClass: 'bg-red-500/15',
+    textClass: 'text-red-400',
+  },
+  {
+    key: 'infinia',
+    label: 'Infinia',
+    shortLabel: 'Infinia',
+    unit: '$/L',
+    match: 'Infinia',
+    color: '#06b6d4',
+    bgClass: 'bg-cyan-500/15',
+    textClass: 'text-cyan-400',
+  },
+  {
+    key: 'infinia_diesel',
+    label: 'Infinia Diesel',
+    shortLabel: 'Inf. Diesel',
+    unit: '$/L',
+    match: 'Infinia Diesel',
+    color: '#14b8a6',
+    bgClass: 'bg-teal-500/15',
+    textClass: 'text-teal-400',
+  },
+  {
+    key: 'gnc',
+    label: 'GNC',
+    shortLabel: 'GNC',
+    unit: '$/m³',
+    match: 'GNC',
+    color: '#10b981',
+    bgClass: 'bg-emerald-500/15',
+    textClass: 'text-emerald-400',
+  },
+]
+
+export function getProductInfo(producto: string): ProductInfo {
+  return (
+    PRODUCT_MAP.find((p) => producto.includes(p.match)) || {
+      key: 'nafta_super' as ProductKey,
+      label: producto,
+      shortLabel: producto.slice(0, 12),
+      unit: '$/L',
+      match: producto,
+      color: '#64748b',
+      bgClass: 'bg-slate-500/15',
+      textClass: 'text-slate-400',
+    }
+  )
+}
+
+```
+```utils/api-estadisticas.ts
+// Estadísticas y Timeline endpoints
+
+const API_BASE = 'https://tvcpev0ryc.execute-api.sa-east-1.amazonaws.com'
+const DEFAULT_TIMEOUT = 30000
+
+async function fetchWithTimeout(
+  url: string,
+  timeout: number,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+  try {
+    const response = await fetch(url, {
+      signal: signal || controller.signal,
+    })
+    clearTimeout(timeoutId)
+    return response
+  } catch (error) {
+    clearTimeout(timeoutId)
+    throw error
+  }
+}
+
+// ─── Estadísticas Endpoint ───────────────────────────────────────────
+export interface EstadisticasProducto {
+  producto: string
+  precio_min: number
+  precio_max: number
+  precio_promedio: number
+  precio_mediana: number
+  cantidad_estaciones: number
+  por_bandera: Array<{
+    bandera: string
+    precio_promedio: number
+    cantidad_estaciones: number
+  }>
+}
+
+export interface EstadisticasResponse {
+  productos: EstadisticasProducto[]
+  ultima_actualizacion: string
+  nota_cobertura: string
+}
+
+export async function fetchEstadisticas(options: {
+  provincia?: string
+  localidad?: string
+  lat?: number
+  lon?: number
+  radio_km?: number
+  producto?: string
+}): Promise<EstadisticasResponse> {
+  const { provincia, localidad, lat, lon, radio_km, producto } = options
+
+  const params: Record<string, string> = {}
+  if (provincia) params.provincia = provincia
+  if (localidad) params.localidad = localidad
+  if (typeof lat === 'number' && typeof lon === 'number') {
+    params.lat = lat.toString()
+    params.lon = lon.toString()
+  }
+  if (radio_km) params.radio_km = radio_km.toString()
+  if (producto) params.producto = producto
+
+  const queryString = new URLSearchParams(params).toString()
+  const url = `${API_BASE}/precios/estadisticas${queryString ? '?' + queryString : ''}`
+
+  console.log(`[API] Estadísticas fetch: ${url}`)
+  const response = await fetchWithTimeout(url, DEFAULT_TIMEOUT)
+
+  if (!response.ok) {
+    throw new Error(`Estadísticas API error: ${response.status}`)
+  }
+
+  return response.json()
+}
+
+// ─── Timeline Endpoint ───────────────────────────────────────────────
+export interface TimelinePoint {
+  fecha: string
+  precio_min: number
+  precio_promedio: number
+  cantidad_estaciones: number
+}
+
+export interface TimelineResponse {
+  total_puntos: number
+  precio_inicial: number
+  precio_actual: number
+  variacion_pct: number
+  timeline: TimelinePoint[]
+}
+
+export async function fetchTimeline(options: {
+  provincia?: string
+  localidad?: string
+  producto: string
+  bandera?: string
+  fecha_desde?: string
+  fecha_hasta?: string
+}): Promise<TimelineResponse> {
+  const { provincia, localidad, producto, bandera, fecha_desde, fecha_hasta } =
+    options
+
+  const params: Record<string, string> = {}
+  if (provincia) params.provincia = provincia
+  if (localidad) params.localidad = localidad
+  params.producto = producto
+  if (bandera) params.bandera = bandera
+  if (fecha_desde) params.fecha_desde = fecha_desde
+  if (fecha_hasta) params.fecha_hasta = fecha_hasta
+
+  const queryString = new URLSearchParams(params).toString()
+  const url = `${API_BASE}/precios/timeline${queryString ? '?' + queryString : ''}`
+
+  console.log(`[API] Timeline fetch: ${url}`)
+  const response = await fetchWithTimeout(url, DEFAULT_TIMEOUT)
+
+  if (!response.ok) {
+    throw new Error(`Timeline API error: ${response.status}`)
+  }
+
+  return response.json()
+}
+
+```
+```utils/api.ts
+import {
+  Station,
+  FilterState,
+  RenderAPIResponse,
+  RenderStation,
+  SmartAPIResponse,
+  UbicacionResuelta,
+  DatasetInfo,
+} from '../types'
+
+export type { DatasetInfo, UbicacionResuelta }
+
+// ─── API Configuration ───────────────────────────────────────────────
+const API_BASE = 'https://tvcpev0ryc.execute-api.sa-east-1.amazonaws.com'
+const DEFAULT_TIMEOUT = 15000 // 15s — AWS Lambda can cold-start on first request
+
+// ─── Types ───────────────────────────────────────────────────────────
+export interface FetchOptions {
+  limit?: number
+  signal?: AbortSignal
+  fecha_desde?: string
+}
+
+export interface FetchResult {
+  data: Station[]
+  total: number
+  isFallback: boolean
+  source: 'api' | 'local-fallback'
+  error?: string
+}
+
+export interface NearbyOptions {
+  lat: number
+  lon: number
+  radioKm?: number
+  provincia?: string
+  localidad?: string
+  producto?: string
+  fecha_desde?: string
+  signal?: AbortSignal
+}
+
+// ─── In-Memory Cache ─────────────────────────────────────────────────
+interface CacheEntry {
+  data: Station[]
+  total: number
+  timestamp: number
+}
+
+const cache = new Map<string, CacheEntry>()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+function getCacheKey(endpoint: string, params: Record<string, string>): string {
+  return `${endpoint}:${JSON.stringify(params)}`
+}
+
+function getCached(key: string): CacheEntry | null {
+  const entry = cache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.timestamp > CACHE_TTL) {
+    cache.delete(key)
+    return null
+  }
+  return entry
+}
+
+export function clearCache() {
+  cache.clear()
+}
+
+// ─── Local Fallback Data ─────────────────────────────────────────────
+export const LOCAL_FALLBACK_DATA: Station[] = [
+  {
+    empresa: 'YPF',
+    direccion: 'Ruta 5 km 35',
+    producto: 'Nafta (súper) entre 92 y 95 Ron',
+    precio: 1215.5,
+    provincia: 'BUENOS AIRES',
+    localidad: 'MORENO',
+    fecha_vigencia: '2026-03-23',
+  },
+  {
+    empresa: 'Shell',
+    direccion: 'Avenida General Paz 1500',
+    producto: 'Nafta (súper) entre 92 y 95 Ron',
+    precio: 1248.0,
+    provincia: 'BUENOS AIRES',
+    localidad: 'MORENO',
+    fecha_vigencia: '2026-03-23',
+  },
+  {
+    empresa: 'Axion Energy',
+    direccion: 'Ruta 3 km 25',
+    producto: 'Nafta (súper) entre 92 y 95 Ron',
+    precio: 1198.75,
+    provincia: 'BUENOS AIRES',
+    localidad: 'MORENO',
+    fecha_vigencia: '2026-03-23',
+  },
+  {
+    empresa: 'ACA',
+    direccion: 'Moreno 450',
+    producto: 'Nafta (súper) entre 92 y 95 Ron',
+    precio: 1260.0,
+    provincia: 'BUENOS AIRES',
+    localidad: 'MORENO',
+    fecha_vigencia: '2026-03-23',
+  },
+  {
+    empresa: 'YPF',
+    direccion: 'Avenida San Martín 800',
+    producto: 'Gas Oil Grado 2',
+    precio: 1335.25,
+    provincia: 'BUENOS AIRES',
+    localidad: 'MORENO',
+    fecha_vigencia: '2026-03-23',
+  },
+  {
+    empresa: 'Shell',
+    direccion: 'Ruta 2 km 40',
+    producto: 'Gas Oil Grado 2',
+    precio: 1358.0,
+    provincia: 'BUENOS AIRES',
+    localidad: 'MORENO',
+    fecha_vigencia: '2026-03-23',
+  },
+  {
+    empresa: 'Axion Energy',
+    direccion: 'Camino a La Reja 200',
+    producto: 'Nafta (súper) entre 92 y 95 Ron',
+    precio: 1205.3,
+    provincia: 'BUENOS AIRES',
+    localidad: 'MORENO',
+    fecha_vigencia: '2026-03-23',
+  },
+  {
+    empresa: 'YPF',
+    direccion: 'Ruta 7 km 50',
+    producto: 'Nafta de más de 95 Ron',
+    precio: 1425.0,
+    provincia: 'BUENOS AIRES',
+    localidad: 'MORENO',
+    fecha_vigencia: '2026-03-23',
+  },
+  {
+    empresa: 'Shell',
+    direccion: 'Av. Libertador 2200',
+    producto: 'Nafta de más de 95 Ron',
+    precio: 1460.5,
+    provincia: 'BUENOS AIRES',
+    localidad: 'MORENO',
+    fecha_vigencia: '2026-03-23',
+  },
+  {
+    empresa: 'Puma Energy',
+    direccion: 'Ruta 5 km 42',
+    producto: 'Nafta (súper) entre 92 y 95 Ron',
+    precio: 1190.0,
+    provincia: 'BUENOS AIRES',
+    localidad: 'MORENO',
+    fecha_vigencia: '2026-03-23',
+  },
+  {
+    empresa: 'Puma Energy',
+    direccion: 'Ruta 5 km 42',
+    producto: 'GNC',
+    precio: 769.0,
+    provincia: 'BUENOS AIRES',
+    localidad: 'MORENO',
+    fecha_vigencia: '2026-03-23',
+  },
+  {
+    empresa: 'Gulf',
+    direccion: 'Av. Presidente Perón 3500',
+    producto: 'Nafta (súper) entre 92 y 95 Ron',
+    precio: 1175.0,
+    provincia: 'BUENOS AIRES',
+    localidad: 'MORENO',
+    fecha_vigencia: '2026-03-23',
+  },
+]
+
+// ─── Helpers ─────────────────────────────────────────────────────────
+export const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+  }).format(amount)
+}
+
+// Known brand colors
+const BRAND_COLORS: [string, string][] = [
+  ['YPF', '#3b82f6'],
+  ['SHELL', '#eab308'],
+  ['AXION', '#ef4444'],
+  ['ACA', '#22c55e'],
+  ['PUMA', '#f97316'],
+  ['GULF', '#60a5fa'],
+  ['PETROBRAS', '#16a34a'],
+  ['OIL COMBUSTIBLES', '#a855f7'],
+  ['REFINOR', '#ec4899'],
+  ['DAPSA', '#14b8a6'],
+  ['SOL', '#fbbf24'],
+  ['PAN AMERICAN', '#6366f1'],
+  ['BLANCA', '#f472b6'],
+  ['COPETRO', '#06b6d4'],
+  ['RAIZEN', '#f59e0b'],
+  ['VOY CON ENERGIA', '#10b981'],
+  ['SERVISOL', '#8b5cf6'],
+  ['CMF', '#0ea5e9'],
+  ['DEHEZA', '#84cc16'],
+  ['PLACOMGAS', '#f43f5e'],
+  ['SAN MIGUEL', '#d946ef'],
+  ['EMIDAM', '#fb923c'],
+  ['LAS AVENIDAS', '#2dd4bf'],
+]
+
+// Generate a consistent color from a string (for unknown companies)
+function hashColor(str: string): string {
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  // Generate vibrant HSL color (avoid grays)
+  const h = Math.abs(hash) % 360
+  return `hsl(${h}, 70%, 55%)`
+}
+
+export const getCompanyColor = (empresa: string): string => {
+  const n = empresa.toUpperCase()
+  for (const [brand, color] of BRAND_COLORS) {
+    if (n.includes(brand)) return color
+  }
+  return hashColor(n)
+}
+
+const BRAND_CLASSES: [string, string][] = [
+  ['YPF', 'bg-blue-500'],
+  ['SHELL', 'bg-yellow-500'],
+  ['AXION', 'bg-red-500'],
+  ['ACA', 'bg-green-500'],
+  ['PUMA', 'bg-orange-500'],
+  ['GULF', 'bg-blue-400'],
+  ['PETROBRAS', 'bg-green-600'],
+  ['OIL', 'bg-purple-500'],
+  ['REFINOR', 'bg-pink-500'],
+  ['DAPSA', 'bg-teal-500'],
+]
+
+export const getCompanyColorClass = (empresa: string): string => {
+  const n = empresa.toUpperCase()
+  for (const [brand, cls] of BRAND_CLASSES) {
+    if (n.includes(brand)) return cls
+  }
+  return 'bg-amber-600'
+}
+
+// ─── Convert API response to Station ─────────────────────────────────
+function parsePrice(raw: any): number {
+  const num = typeof raw === 'number' ? raw : parseFloat(String(raw))
+  if (isNaN(num) || num < 0) return 0
+  // Filter out values that look like coordinates (-34.xxx, -58.xxx)
+  if (num < 0) return 0
+  return num
+}
+
+function toStation(raw: RenderStation): Station {
+  return {
+    empresa: (raw.empresa || '').trim(),
+    razon_social: raw.razon_social?.trim() || undefined,
+    bandera: raw.bandera?.trim() || undefined,
+    tipo_bandera: raw.tipo_bandera?.trim() || undefined,
+    numero_establecimiento: raw.numero_establecimiento?.trim() || undefined,
+    calle: raw.calle?.trim() || undefined,
+    numero: raw.numero?.trim() || undefined,
+    direccion: (raw.direccion || '').trim(),
+    localidad: (raw.localidad || '').trim().toUpperCase(),
+    provincia: (raw.provincia || '').trim().toUpperCase(),
+    codigo_postal: raw.codigo_postal?.trim() || undefined,
+    latitud: raw.latitud ?? undefined,
+    longitud: raw.longitud ?? undefined,
+    producto: (raw.producto || '').trim(),
+    precio: parsePrice(raw.precio),
+    fecha_vigencia: (raw.fecha_vigencia || '').trim(),
+    precio_vigente: raw.precio_vigente,
+    distancia: raw.distancia_km ?? undefined,
+  }
+}
+
+// ─── Fetch with Timeout ──────────────────────────────────────────────
+async function fetchWithTimeout(
+  url: string,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort()
+    } else {
+      signal.addEventListener('abort', () => controller.abort(), { once: true })
+    }
+  }
+
+  try {
+    const response = await fetch(url, { signal: controller.signal })
+    clearTimeout(timeoutId)
+    return response
+  } catch (err) {
+    clearTimeout(timeoutId)
+    throw err
+  }
+}
+
+// ─── Core API Call ───────────────────────────────────────────────────
+async function callApi(
+  endpoint: string,
+  params: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<{ data: Station[]; total: number }> {
+  const cacheKey = getCacheKey(endpoint, params)
+  const cached = getCached(cacheKey)
+  if (cached) {
+    console.log(`[API] Cache hit: ${cached.data.length} registros`)
+    return { data: cached.data, total: cached.total }
+  }
+
+  const queryString = new URLSearchParams(params).toString()
+  const url = `${API_BASE}${endpoint}${queryString ? '?' + queryString : ''}`
+
+  console.log(`[API] Fetching: ${url}`)
+  const response = await fetchWithTimeout(url, DEFAULT_TIMEOUT, signal)
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+  }
+
+  const json: RenderAPIResponse = await response.json()
+  const stations = (json.estaciones || [])
+    .map(toStation)
+    .filter((s) => s.precio > 0)
+  const total = json.total || stations.length
+
+  // Cache the result
+  cache.set(cacheKey, { data: stations, total, timestamp: Date.now() })
+
+  console.log(`[API] ✓ ${stations.length} estaciones (total: ${total})`)
+  return { data: stations, total }
+}
+
+// ─── Public: Smart Fetch (primary endpoint) ──────────────────────────
+export interface SmartResult {
+  data: Station[]
+  total: number
+  ubicacion: UbicacionResuelta | null
+  isFallback: boolean
+  source: 'api-smart' | 'api' | 'local-fallback'
+  error?: string
+}
+
+export async function fetchSmartData(options: {
+  lat?: number | null
+  lon?: number | null
+  provincia?: string
+  localidad?: string
+  barrio?: string
+  producto?: string
+  radio_km?: number
+  fecha_desde?: string
+  limit?: number
+  signal?: AbortSignal
+}): Promise<SmartResult> {
+  const {
+    lat,
+    lon,
+    provincia,
+    localidad,
+    barrio,
+    producto,
+    radio_km = 15,
+    fecha_desde,
+    limit = 500,
+    signal,
+  } = options
+
+  try {
+    const params: Record<string, string> = {}
+    // Only add lat/lon if they are valid numbers (not null)
+    if (typeof lat === 'number' && typeof lon === 'number') {
+      params.lat = lat.toString()
+      params.lon = lon.toString()
+    }
+    if (provincia) params.provincia = provincia
+    if (localidad) params.localidad = localidad
+    if (barrio) params.barrio = barrio
+    if (producto) params.producto = producto
+    if (radio_km) params.radio_km = radio_km.toString()
+    if (fecha_desde) params.fecha_desde = fecha_desde
+    if (limit) params.limit = limit.toString()
+
+    const cacheKey = getCacheKey('/precios/smart', params)
+    const cached = getCached(cacheKey)
+    if (cached) {
+      console.log(`[API] Smart cache hit: ${cached.data.length} registros`)
+      return {
+        data: cached.data,
+        total: cached.total,
+        ubicacion: null,
+        isFallback: false,
+        source: 'api-smart',
+      }
+    }
+
+    const queryString = new URLSearchParams(params).toString()
+    const url = `${API_BASE}/precios/smart${queryString ? '?' + queryString : ''}`
+
+    console.log(`[API] Smart fetch: ${url}`)
+    const response = await fetchWithTimeout(url, DEFAULT_TIMEOUT, signal)
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+
+    const json: SmartAPIResponse = await response.json()
+    const stations = (json.estaciones || [])
+      .map(toStation)
+      .filter((s) => s.precio > 0)
+    const total = json.total || stations.length
+
+    cache.set(cacheKey, { data: stations, total, timestamp: Date.now() })
+
+    console.log(
+      `[API] Smart ✓ ${stations.length} estaciones (${json.ubicacion_resuelta?.method || 'unknown'})`,
+    )
+
+    // Normalize ubicacion — API may return localidad/provincia as objects
+    const rawUbic = json.ubicacion_resuelta
+    let ubicacion: UbicacionResuelta | null = null
+    if (rawUbic) {
+      const normStr = (val: any): string | undefined => {
+        if (typeof val === 'string') return val
+        if (val && typeof val === 'object') {
+          // Extract the string field from nested objects like {localidad: "X", provincia: "Y", ...}
+          if ('localidad' in val && typeof val.localidad === 'string')
+            return val.localidad
+          if ('provincia' in val && typeof val.provincia === 'string')
+            return val.provincia
+          if ('nombre' in val && typeof val.nombre === 'string')
+            return val.nombre
+        }
+        return undefined
+      }
+      ubicacion = {
+        method: rawUbic.method,
+        precision: rawUbic.precision,
+        lat: rawUbic.lat,
+        lon: rawUbic.lon,
+        localidad: normStr(rawUbic.localidad),
+        provincia: normStr(rawUbic.provincia),
+        localidad_detectada: normStr(rawUbic.localidad_detectada),
+        localidad_dataset: normStr(rawUbic.localidad_dataset),
+        distancia_dataset_km:
+          typeof rawUbic.distancia_dataset_km === 'number'
+            ? rawUbic.distancia_dataset_km
+            : undefined,
+      }
+    }
+
+    return {
+      data: stations,
+      total,
+      ubicacion,
+      isFallback: false,
+      source: 'api-smart',
+    }
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err
+    console.warn('[API] Smart falló, intentando /precios:', err.message)
+
+    // Fallback to regular /precios
+    try {
+      const params: Record<string, string> = { limit: limit.toString() }
+      if (producto) params.producto = producto
+      if (fecha_desde) params.fecha_desde = fecha_desde
+
+      const { data, total } = await callApi('/precios', params, signal)
+      return {
+        data,
+        total,
+        ubicacion: null,
+        isFallback: false,
+        source: 'api',
+        error: 'Smart no disponible, usando /precios',
+      }
+    } catch (err2: any) {
+      if (err2.name === 'AbortError') throw err2
+      console.warn('[API] Todo falló, usando datos locales')
+      const fallback = applyLocalFallback(
+        {
+          provincia: '',
+          localidad: '',
+          empresa: '',
+          producto: producto || '',
+          fecha_desde: fecha_desde || '',
+        },
+        err.message,
+      )
+      return { ...fallback, ubicacion: null, source: 'local-fallback' }
+    }
+  }
+}
+
+// ─── Public: Fetch Dataset Info ──────────────────────────────────────
+export async function fetchDatasetInfo(): Promise<DatasetInfo | null> {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE}/info`, 10000)
+    if (!response.ok) return null
+    return await response.json()
+  } catch {
+    return null
+  }
+}
+
+// ─── Helpers: extract string from possibly-object API values ─────────
+function toStringArray(arr: any[]): string[] {
+  return arr
+    .map((item) => {
+      if (typeof item === 'string') return item
+      if (item && typeof item === 'object') {
+        // API may return {localidad: "X", ...} or {provincia: "Y", ...} or {nombre: "Z"}
+        return String(
+          item.localidad ||
+            item.provincia ||
+            item.nombre ||
+            item.name ||
+            JSON.stringify(item),
+        )
+      }
+      return String(item)
+    })
+    .filter(Boolean)
+}
+
+// ─── Public: Fetch Provinces ─────────────────────────────────────────
+export async function fetchProvincias(): Promise<string[]> {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE}/provincias`, 15000)
+    if (!response.ok) return []
+    const data = await response.json()
+    const raw = Array.isArray(data) ? data : data.provincias || []
+    return toStringArray(raw)
+  } catch {
+    return []
+  }
+}
+
+// ─── Public: Fetch Localidades for a Province ────────────────────────
+export async function fetchLocalidades(provincia: string): Promise<string[]> {
+  if (!provincia) return []
+  try {
+    const params = new URLSearchParams({ provincia })
+    const response = await fetchWithTimeout(
+      `${API_BASE}/localidades?${params.toString()}`,
+      15000,
+    )
+    if (!response.ok) return []
+    const data = await response.json()
+    const raw = Array.isArray(data) ? data : data.localidades || []
+    return toStringArray(raw)
+  } catch {
+    return []
+  }
+}
+
+// ─── Public: Fetch Filtered Stations ─────────────────────────────────
+export async function fetchFuelData(
+  filters: FilterState,
+  options: FetchOptions = {},
+): Promise<FetchResult> {
+  const { limit = 500, signal, fecha_desde } = options
+
+  try {
+    const params: Record<string, string> = {}
+    if (filters.provincia) params.provincia = filters.provincia
+    if (filters.localidad) params.localidad = filters.localidad
+    if (filters.producto) params.producto = filters.producto
+    if (limit) params.limit = limit.toString()
+    // Use filter's fecha_desde or the option's
+    const dateFilter = filters.fecha_desde || fecha_desde
+    if (dateFilter) params.fecha_desde = dateFilter
+
+    const { data, total } = await callApi('/precios', params, signal)
+
+    // Filter by empresa client-side (API doesn't have empresa filter)
+    let filtered = data
+    if (filters.empresa) {
+      filtered = data.filter((s) =>
+        s.empresa.toUpperCase().includes(filters.empresa.toUpperCase()),
+      )
+    }
+
+    return {
+      data: filtered,
+      total,
+      isFallback: false,
+      source: 'api',
+    }
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err
+
+    console.warn('[API] Fetch falló, usando datos locales:', err.message)
+    return applyLocalFallback(filters, err.message)
+  }
+}
+
+// ─── Public: Fetch Nearby Stations ───────────────────────────────────
+export async function fetchNearbyStations(
+  options: NearbyOptions,
+): Promise<FetchResult> {
+  const {
+    lat,
+    lon,
+    radioKm = 10,
+    provincia,
+    localidad,
+    producto,
+    signal,
+  } = options
+
+  try {
+    const params: Record<string, string> = {
+      lat: lat.toString(),
+      lon: lon.toString(),
+      radio_km: radioKm.toString(),
+    }
+    if (provincia) params.provincia = provincia
+    if (localidad) params.localidad = localidad
+    if (producto) params.producto = producto
+    if (options.fecha_desde) params.fecha_desde = options.fecha_desde
+
+    const { data, total } = await callApi('/precios/cercanos', params, signal)
+
+    return {
+      data,
+      total,
+      isFallback: false,
+      source: 'api',
+    }
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err
+
+    console.warn('[API] Cercanos falló, usando datos locales:', err.message)
+    return applyLocalFallback(
+      {
+        provincia: provincia || '',
+        localidad: localidad || '',
+        empresa: '',
+        producto: producto || '',
+      },
+      err.message,
+    )
+  }
+}
+
+// ─── Public: Fetch Cheapest Stations ─────────────────────────────────
+export async function fetchCheapestStations(
+  filters: FilterState,
+  top: number = 10,
+  signal?: AbortSignal,
+): Promise<FetchResult> {
+  try {
+    const params: Record<string, string> = { top: top.toString() }
+    if (filters.provincia) params.provincia = filters.provincia
+    if (filters.localidad) params.localidad = filters.localidad
+    if (filters.producto) params.producto = filters.producto
+    if (filters.fecha_desde) params.fecha_desde = filters.fecha_desde
+
+    const { data, total } = await callApi('/precios/baratos', params, signal)
+
+    return {
+      data,
+      total,
+      isFallback: false,
+      source: 'api',
+    }
+  } catch (err: any) {
+    if (err.name === 'AbortError') throw err
+
+    console.warn('[API] Baratos falló, usando datos locales:', err.message)
+    return applyLocalFallback(filters, err.message)
+  }
+}
+
+// ─── Public: Health Check ────────────────────────────────────────────
+export async function checkApiHealth(): Promise<boolean> {
+  try {
+    const response = await fetchWithTimeout(`${API_BASE}/health`, 10000)
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+// ─── Local Fallback ──────────────────────────────────────────────────
+function applyLocalFallback(
+  filters: FilterState,
+  errorMsg: string,
+): FetchResult {
+  let filtered = [...LOCAL_FALLBACK_DATA]
+
+  if (filters.provincia) {
+    filtered = filtered.filter((s) =>
+      s.provincia.toUpperCase().includes(filters.provincia.toUpperCase()),
+    )
+  }
+  if (filters.localidad) {
+    filtered = filtered.filter((s) =>
+      s.localidad.toUpperCase().includes(filters.localidad.toUpperCase()),
+    )
+  }
+  if (filters.empresa) {
+    filtered = filtered.filter((s) =>
+      s.empresa.toUpperCase().includes(filters.empresa.toUpperCase()),
+    )
+  }
+  if (filters.producto) {
+    filtered = filtered.filter((s) =>
+      s.producto.toUpperCase().includes(filters.producto.toUpperCase()),
+    )
+  }
+
+  return {
+    data: filtered,
+    total: filtered.length,
+    isFallback: true,
+    source: 'local-fallback',
+    error: errorMsg,
+  }
+}
+
+// ─── Available Products ──────────────────────────────────────────────
+export const PRODUCTOS_DISPONIBLES = [
+  'GNC',
+  'Gas Oil Grado 2',
+  'Gas Oil Grado 3',
+  'Nafta (súper) entre 92 y 95 Ron',
+  'Nafta (premium) de más de 95 Ron',
+]
+
+```
+```utils/cloudflare-worker.js
+
+/**
+ * ═══════════════════════════════════════════════════════════════════
+ * PROXY CORS PARA DATOS.GOB.AR — Cloudflare Worker
+ * ═══════════════════════════════════════════════════════════════════
+ * 
+ * INSTRUCCIONES DE DEPLOY (5 minutos, gratis):
+ * 
+ * 1. Andá a https://workers.cloudflare.com y creá una cuenta gratis
+ * 2. Hacé click en "Create a Worker"
+ * 3. Borrá el código de ejemplo y pegá TODO este archivo
+ * 4. Click en "Save and Deploy"
+ * 5. Te va a dar una URL tipo: https://tu-worker.tu-usuario.workers.dev
+ * 6. Copiá esa URL y pegala en utils/api.ts en CUSTOM_PROXY_URL
+ * 
+ * PLAN GRATUITO: 100,000 requests/día — más que suficiente
+ * 
+ * ═══════════════════════════════════════════════════════════════════
+ */
+
+const ALLOWED_ORIGIN_API = 'https://datos.gob.ar'
+
+// Orígenes permitidos (agregá tu dominio de producción)
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:4173',
+  'https://*.magicpatterns.com',
+  // Agregá tu dominio de producción acá:
+  // 'https://tu-app.vercel.app',
+  // 'https://tu-dominio.com',
+]
+
+function isOriginAllowed(origin) {
+  if (!origin) return true // Allow server-to-server
+  return ALLOWED_ORIGINS.some(allowed => {
+    if (allowed.includes('*')) {
+      const regex = new RegExp('^' + allowed.replace(/\*/g, '.*') + '$')
+      return regex.test(origin)
+    }
+    return allowed === origin
+  })
+}
+
+function corsHeaders(origin) {
+  return {
+    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept',
+    'Access-Control-Max-Age': '86400',
+  }
+}
+
+export default {
+  async fetch(request) {
+    const url = new URL(request.url)
+    const origin = request.headers.get('Origin')
+
+    // Handle CORS preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        status: 204,
+        headers: corsHeaders(origin),
+      })
+    }
+
+    // Only allow GET
+    if (request.method !== 'GET') {
+      return new Response(JSON.stringify({ error: 'Solo se permite GET' }), {
+        status: 405,
+        headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Health check endpoint
+    if (url.pathname === '/' || url.pathname === '/health') {
+      return new Response(JSON.stringify({ 
+        status: 'ok', 
+        service: 'combustible-argentina-proxy',
+        timestamp: new Date().toISOString()
+      }), {
+        headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Main proxy endpoint: /api/combustibles?...params
+    if (url.pathname === '/api/combustibles') {
+      try {
+        // Build the datos.gob.ar URL
+        const targetParams = new URLSearchParams()
+        
+        // Pass through all query params
+        for (const [key, value] of url.searchParams) {
+          targetParams.append(key, value)
+        }
+
+        // Ensure resource_id is always present
+        if (!targetParams.has('resource_id')) {
+          targetParams.set('resource_id', 'energia_80ac25de-a44a-4445-9215-090cf55cfda5')
+        }
+
+        const targetUrl = `${ALLOWED_ORIGIN_API}/api/3/action/datastore_search?${targetParams.toString()}`
+
+        console.log(`[Proxy] Fetching: ${targetUrl}`)
+
+        const apiResponse = await fetch(targetUrl, {
+          headers: {
+            'User-Agent': 'CombustibleArgentina-Proxy/1.0',
+            'Accept': 'application/json',
+          },
+        })
+
+        if (!apiResponse.ok) {
+          throw new Error(`API responded with ${apiResponse.status}`)
+        }
+
+        const data = await apiResponse.json()
+
+        return new Response(JSON.stringify(data), {
+          status: 200,
+          headers: {
+            ...corsHeaders(origin),
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=300', // Cache 5 min en CDN
+            'X-Proxy-Source': 'cloudflare-worker',
+          },
+        })
+
+      } catch (err) {
+        console.error('[Proxy] Error:', err.message)
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: { message: err.message },
+          proxy: true 
+        }), {
+          status: 502,
+          headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
+        })
+      }
+    }
+
+    // 404 for unknown routes
+    return new Response(JSON.stringify({ 
+      error: 'Ruta no encontrada',
+      rutas_disponibles: ['/health', '/api/combustibles?resource_id=...&limit=100']
+    }), {
+      status: 404,
+      headers: { ...corsHeaders(origin), 'Content-Type': 'application/json' },
+    })
+  },
+}
+
+```
+```utils/haversine.ts
+export function haversine(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  if (isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) return Infinity
+
+  const R = 6371 // Earth radius in km
+  const phi1 = (lat1 * Math.PI) / 180
+  const phi2 = (lat2 * Math.PI) / 180
+  const dphi = ((lat2 - lat1) * Math.PI) / 180
+  const dlambda = ((lon2 - lon1) * Math.PI) / 180
+
+  const a =
+    Math.sin(dphi / 2) ** 2 +
+    Math.cos(phi1) * Math.cos(phi2) * Math.sin(dlambda / 2) ** 2
+
+  return R * 2 * Math.asin(Math.sqrt(a))
+}
+
+```

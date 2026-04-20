@@ -1,0 +1,421 @@
+- generic [ref=e2]:
+  - region
+  - generic [ref=e3]:
+    - link "Skip to content" [ref=e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner [ref=e6]:
+      - heading "Navigation Menu" [level=2] [ref=e7]
+      - generic [ref=e8]:
+        - link "Homepage" [ref=e10] [cursor=pointer]:
+          - /url: /
+          - img [ref=e11]
+        - generic [ref=e13]:
+          - navigation "Global" [ref=e16]:
+            - list [ref=e17]:
+              - listitem [ref=e18]:
+                - button "Platform" [ref=e20] [cursor=pointer]:
+                  - text: Platform
+                  - img [ref=e21]
+              - listitem [ref=e23]:
+                - button "Solutions" [ref=e25] [cursor=pointer]:
+                  - text: Solutions
+                  - img [ref=e26]
+              - listitem [ref=e28]:
+                - button "Resources" [ref=e30] [cursor=pointer]:
+                  - text: Resources
+                  - img [ref=e31]
+              - listitem [ref=e33]:
+                - button "Open Source" [ref=e35] [cursor=pointer]:
+                  - text: Open Source
+                  - img [ref=e36]
+              - listitem [ref=e38]:
+                - button "Enterprise" [ref=e40] [cursor=pointer]:
+                  - text: Enterprise
+                  - img [ref=e41]
+              - listitem [ref=e43]:
+                - link "Pricing" [ref=e44] [cursor=pointer]:
+                  - /url: https://github.com/pricing
+                  - generic [ref=e45]: Pricing
+          - generic [ref=e46]:
+            - button "Search or jump to…" [ref=e49] [cursor=pointer]:
+              - img [ref=e51]
+            - link "Sign in" [ref=e54] [cursor=pointer]:
+              - /url: /login?return_to=https%3A%2F%2Fgithub.com%2FBluelytics%2Fbluelytics_api
+            - link "Sign up" [ref=e55] [cursor=pointer]:
+              - /url: /signup?ref_cta=Sign+up&ref_loc=header+logged+out&ref_page=%2F%3Cuser-name%3E%2F%3Crepo-name%3E&source=header-repo&source_repo=Bluelytics%2Fbluelytics_api
+            - button "Appearance settings" [ref=e58] [cursor=pointer]:
+              - img
+  - main [ref=e62]:
+    - generic [ref=e63]:
+      - generic [ref=e64]:
+        - generic [ref=e66]:
+          - img [ref=e67]
+          - link "Bluelytics" [ref=e70] [cursor=pointer]:
+            - /url: /Bluelytics
+          - generic [ref=e71]: /
+          - strong [ref=e72]:
+            - link "bluelytics_api" [ref=e73] [cursor=pointer]:
+              - /url: /Bluelytics/bluelytics_api
+          - generic [ref=e74]: Public
+        - generic [ref=e75]:
+          - list:
+            - listitem [ref=e76]:
+              - link "You must be signed in to change notification settings" [ref=e77] [cursor=pointer]:
+                - /url: /login?return_to=%2FBluelytics%2Fbluelytics_api
+                - img [ref=e78]
+                - text: Notifications
+            - listitem [ref=e80]:
+              - link "Fork 1" [ref=e81] [cursor=pointer]:
+                - /url: /login?return_to=%2FBluelytics%2Fbluelytics_api
+                - img [ref=e82]
+                - text: Fork
+                - generic "1" [ref=e84]
+            - listitem [ref=e85]:
+              - link "You must be signed in to star a repository" [ref=e87] [cursor=pointer]:
+                - /url: /login?return_to=%2FBluelytics%2Fbluelytics_api
+                - img [ref=e88]
+                - text: Star
+                - generic "9 users starred this repository" [ref=e90]: "9"
+      - navigation "Repository" [ref=e91]:
+        - list [ref=e92]:
+          - listitem [ref=e93]:
+            - link "Code" [ref=e94] [cursor=pointer]:
+              - /url: /Bluelytics/bluelytics_api
+              - img [ref=e95]
+              - generic [ref=e97]: Code
+          - listitem [ref=e98]:
+            - link "Issues 2" [ref=e99] [cursor=pointer]:
+              - /url: /Bluelytics/bluelytics_api/issues
+              - img [ref=e100]
+              - generic [ref=e103]: Issues
+              - generic "2" [ref=e104]
+          - listitem [ref=e105]:
+            - link "Pull requests" [ref=e106] [cursor=pointer]:
+              - /url: /Bluelytics/bluelytics_api/pulls
+              - img [ref=e107]
+              - generic [ref=e109]: Pull requests
+          - listitem [ref=e110]:
+            - link "Actions" [ref=e111] [cursor=pointer]:
+              - /url: /Bluelytics/bluelytics_api/actions
+              - img [ref=e112]
+              - generic [ref=e114]: Actions
+          - listitem [ref=e115]:
+            - link "Projects" [ref=e116] [cursor=pointer]:
+              - /url: /Bluelytics/bluelytics_api/projects
+              - img [ref=e117]
+              - generic [ref=e119]: Projects
+          - listitem [ref=e120]:
+            - link "Security and quality" [ref=e121] [cursor=pointer]:
+              - /url: /Bluelytics/bluelytics_api/security
+              - img [ref=e122]
+              - generic [ref=e124]: Security and quality
+          - listitem [ref=e125]:
+            - link "Insights" [ref=e126] [cursor=pointer]:
+              - /url: /Bluelytics/bluelytics_api/pulse
+              - img [ref=e127]
+              - generic [ref=e129]: Insights
+    - generic [ref=e142]:
+      - heading "Bluelytics/bluelytics_api" [level=1] [ref=e144]
+      - generic [ref=e145]:
+        - generic [ref=e148]:
+          - generic [ref=e149]:
+            - generic [ref=e150]:
+              - button "main branch" [ref=e152] [cursor=pointer]:
+                - generic [ref=e153]:
+                  - generic [ref=e155]:
+                    - img [ref=e157]
+                    - generic [ref=e160]: main
+                  - generic:
+                    - img
+              - generic [ref=e161]:
+                - link "Go to Branches page" [ref=e162] [cursor=pointer]:
+                  - /url: /Bluelytics/bluelytics_api/branches
+                  - img [ref=e163]
+                - link "Go to Tags page" [ref=e165] [cursor=pointer]:
+                  - /url: /Bluelytics/bluelytics_api/tags
+                  - img [ref=e166]
+            - generic [ref=e168]:
+              - generic [ref=e172]:
+                - img [ref=e174]
+                - combobox "Go to file" [ref=e176]
+              - button "Code" [ref=e177] [cursor=pointer]:
+                - generic [ref=e178]:
+                  - generic:
+                    - img
+                  - generic [ref=e179]: Code
+                  - generic:
+                    - img
+          - generic [ref=e181]:
+            - heading "Folders and files" [level=2] [ref=e182]
+            - table "Folders and files" [ref=e183]:
+              - rowgroup:
+                - row "Name Last commit message Last commit date":
+                  - columnheader "Name"
+                  - columnheader "Last commit message":
+                    - generic "Last commit message"
+                  - columnheader "Last commit date":
+                    - generic "Last commit date"
+              - rowgroup [ref=e184]:
+                - row "Latest commit sicarul commits by sicarul Add redeploy Commit 555cf09 · Nov 3, 20233 years ago History 8 Commits" [ref=e185]:
+                  - cell "Latest commit sicarul commits by sicarul Add redeploy Commit 555cf09 · Nov 3, 20233 years ago History 8 Commits" [ref=e186]:
+                    - generic [ref=e187]:
+                      - heading "Latest commit" [level=2] [ref=e188]
+                      - generic [ref=e189]:
+                        - generic [ref=e191]:
+                          - link "sicarul" [ref=e192] [cursor=pointer]:
+                            - /url: /sicarul
+                            - img "sicarul" [ref=e193]
+                          - link "commits by sicarul" [ref=e194] [cursor=pointer]:
+                            - /url: /Bluelytics/bluelytics_api/commits?author=sicarul
+                            - text: sicarul
+                        - link "Add redeploy" [ref=e198] [cursor=pointer]:
+                          - /url: /Bluelytics/bluelytics_api/commit/555cf0918256eb6017c771a28469564a6a2af741
+                      - generic [ref=e199]:
+                        - generic [ref=e201]:
+                          - link "Commit 555cf09" [ref=e202] [cursor=pointer]:
+                            - /url: /Bluelytics/bluelytics_api/commit/555cf0918256eb6017c771a28469564a6a2af741
+                            - text: 555cf09
+                          - text: ·
+                          - generic "Nov 3, 2023, 11:18 PM GMT-3" [ref=e203]: Nov 3, 20233 years ago
+                        - generic [ref=e204]:
+                          - heading "History" [level=2] [ref=e205]
+                          - link "8 Commits" [ref=e206] [cursor=pointer]:
+                            - /url: /Bluelytics/bluelytics_api/commits/main/
+                            - generic [ref=e207]:
+                              - generic:
+                                - img
+                              - generic [ref=e208]: 8 Commits
+                - row ".gitignore, (File) Initial commit Apr 29, 20215 years ago" [ref=e209]:
+                  - cell ".gitignore, (File)" [ref=e210]:
+                    - generic [ref=e211]:
+                      - img [ref=e212]
+                      - link ".gitignore, (File)" [ref=e217] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/blob/main/.gitignore
+                        - text: .gitignore
+                  - cell "Initial commit" [ref=e218]:
+                    - link "Initial commit" [ref=e221] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api/commit/1bdcc566efa4bf4f1d9f48d4ff9190cc4da66017
+                  - cell "Apr 29, 20215 years ago" [ref=e222]:
+                    - generic [ref=e223]: Apr 29, 20215 years ago
+                - row "Dockerfile, (File) Initial commit Apr 29, 20215 years ago" [ref=e224]:
+                  - cell "Dockerfile, (File)" [ref=e225]:
+                    - generic [ref=e226]:
+                      - img [ref=e227]
+                      - link "Dockerfile, (File)" [ref=e232] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/blob/main/Dockerfile
+                        - text: Dockerfile
+                  - cell "Initial commit" [ref=e233]:
+                    - link "Initial commit" [ref=e236] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api/commit/1bdcc566efa4bf4f1d9f48d4ff9190cc4da66017
+                  - cell "Apr 29, 20215 years ago" [ref=e237]:
+                    - generic [ref=e238]: Apr 29, 20215 years ago
+                - row "currency.go, (File) Add historical Aug 28, 20233 years ago" [ref=e239]:
+                  - cell "currency.go, (File)" [ref=e240]:
+                    - generic [ref=e241]:
+                      - img [ref=e242]
+                      - link "currency.go, (File)" [ref=e247] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/blob/main/currency.go
+                        - text: currency.go
+                  - cell "Add historical" [ref=e248]:
+                    - link "Add historical" [ref=e251] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api/commit/202f9ec027c048e4324599a933aedb9a03e4c500
+                  - cell "Aug 28, 20233 years ago" [ref=e252]:
+                    - generic [ref=e253]: Aug 28, 20233 years ago
+                - row "evolution.go, (File) Add historical Aug 28, 20233 years ago" [ref=e254]:
+                  - cell "evolution.go, (File)" [ref=e255]:
+                    - generic [ref=e256]:
+                      - img [ref=e257]
+                      - link "evolution.go, (File)" [ref=e262] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/blob/main/evolution.go
+                        - text: evolution.go
+                  - cell "Add historical" [ref=e263]:
+                    - link "Add historical" [ref=e266] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api/commit/202f9ec027c048e4324599a933aedb9a03e4c500
+                  - cell "Aug 28, 20233 years ago" [ref=e267]:
+                    - generic [ref=e268]: Aug 28, 20233 years ago
+                - row "go.mod, (File) Initial commit Apr 29, 20215 years ago" [ref=e269]:
+                  - cell "go.mod, (File)" [ref=e270]:
+                    - generic [ref=e271]:
+                      - img [ref=e272]
+                      - link "go.mod, (File)" [ref=e277] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/blob/main/go.mod
+                        - text: go.mod
+                  - cell "Initial commit" [ref=e278]:
+                    - link "Initial commit" [ref=e281] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api/commit/1bdcc566efa4bf4f1d9f48d4ff9190cc4da66017
+                  - cell "Apr 29, 20215 years ago" [ref=e282]:
+                    - generic [ref=e283]: Apr 29, 20215 years ago
+                - row "go.sum, (File) Initial commit Apr 29, 20215 years ago" [ref=e284]:
+                  - cell "go.sum, (File)" [ref=e285]:
+                    - generic [ref=e286]:
+                      - img [ref=e287]
+                      - link "go.sum, (File)" [ref=e292] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/blob/main/go.sum
+                        - text: go.sum
+                  - cell "Initial commit" [ref=e293]:
+                    - link "Initial commit" [ref=e296] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api/commit/1bdcc566efa4bf4f1d9f48d4ff9190cc4da66017
+                  - cell "Apr 29, 20215 years ago" [ref=e297]:
+                    - generic [ref=e298]: Apr 29, 20215 years ago
+                - row "redeploy.sh, (File) Add redeploy Nov 3, 20233 years ago" [ref=e299]:
+                  - cell "redeploy.sh, (File)" [ref=e300]:
+                    - generic [ref=e301]:
+                      - img [ref=e302]
+                      - link "redeploy.sh, (File)" [ref=e307] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/blob/main/redeploy.sh
+                        - text: redeploy.sh
+                  - cell "Add redeploy" [ref=e308]:
+                    - link "Add redeploy" [ref=e311] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api/commit/555cf0918256eb6017c771a28469564a6a2af741
+                  - cell "Nov 3, 20233 years ago" [ref=e312]:
+                    - generic [ref=e313]: Nov 3, 20233 years ago
+                - row "server.go, (File) Add historical Aug 28, 20233 years ago" [ref=e314]:
+                  - cell "server.go, (File)" [ref=e315]:
+                    - generic [ref=e316]:
+                      - img [ref=e317]
+                      - link "server.go, (File)" [ref=e322] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/blob/main/server.go
+                        - text: server.go
+                  - cell "Add historical" [ref=e323]:
+                    - link "Add historical" [ref=e326] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api/commit/202f9ec027c048e4324599a933aedb9a03e4c500
+                  - cell "Aug 28, 20233 years ago" [ref=e327]:
+                    - generic [ref=e328]: Aug 28, 20233 years ago
+                - row "v1.go, (File) Initial commit Apr 29, 20215 years ago" [ref=e329]:
+                  - cell "v1.go, (File)" [ref=e330]:
+                    - generic [ref=e331]:
+                      - img [ref=e332]
+                      - link "v1.go, (File)" [ref=e337] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/blob/main/v1.go
+                        - text: v1.go
+                  - cell "Initial commit" [ref=e338]:
+                    - link "Initial commit" [ref=e341] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api/commit/1bdcc566efa4bf4f1d9f48d4ff9190cc4da66017
+                  - cell "Apr 29, 20215 years ago" [ref=e342]:
+                    - generic [ref=e343]: Apr 29, 20215 years ago
+                - row "v2.go, (File) Query reversed order Nov 3, 20233 years ago" [ref=e344]:
+                  - cell "v2.go, (File)" [ref=e345]:
+                    - generic [ref=e346]:
+                      - img [ref=e347]
+                      - link "v2.go, (File)" [ref=e352] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/blob/main/v2.go
+                        - text: v2.go
+                  - cell "Query reversed order" [ref=e353]:
+                    - link "Query reversed order" [ref=e356] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api/commit/5f2f0a49703de547e3beda41161b92450572524b
+                  - cell "Nov 3, 20233 years ago" [ref=e357]:
+                    - generic [ref=e358]: Nov 3, 20233 years ago
+        - generic [ref=e362]:
+          - generic [ref=e365]:
+            - heading "About" [level=2] [ref=e366]
+            - paragraph [ref=e367]: API For bluelytics.com.ar
+            - link "Activity" [ref=e369] [cursor=pointer]:
+              - /url: /Bluelytics/bluelytics_api/activity
+              - img [ref=e370]
+              - text: Activity
+            - link "Custom properties" [ref=e373] [cursor=pointer]:
+              - /url: /Bluelytics/bluelytics_api/custom-properties
+              - img [ref=e374]
+              - text: Custom properties
+            - heading "Stars" [level=3] [ref=e376]
+            - link "9 stars" [ref=e378] [cursor=pointer]:
+              - /url: /Bluelytics/bluelytics_api/stargazers
+              - img [ref=e379]
+              - strong [ref=e381]: "9"
+              - text: stars
+            - heading "Watchers" [level=3] [ref=e382]
+            - link "0 watching" [ref=e384] [cursor=pointer]:
+              - /url: /Bluelytics/bluelytics_api/watchers
+              - img [ref=e385]
+              - strong [ref=e387]: "0"
+              - text: watching
+            - heading "Forks" [level=3] [ref=e388]
+            - link "1 fork" [ref=e390] [cursor=pointer]:
+              - /url: /Bluelytics/bluelytics_api/forks
+              - img [ref=e391]
+              - strong [ref=e393]: "1"
+              - text: fork
+            - link "Report repository" [ref=e395] [cursor=pointer]:
+              - /url: /contact/report-content?content_url=https%3A%2F%2Fgithub.com%2FBluelytics%2Fbluelytics_api&report=Bluelytics+%28user%29
+          - generic [ref=e397]:
+            - heading "Releases" [level=2] [ref=e398]:
+              - link "Releases" [ref=e399] [cursor=pointer]:
+                - /url: /Bluelytics/bluelytics_api/releases
+            - generic [ref=e400]: No releases published
+          - generic [ref=e402]:
+            - heading "Packages" [level=2] [ref=e403]:
+              - link "Packages" [ref=e404] [cursor=pointer]:
+                - /url: /orgs/Bluelytics/packages?repo_name=bluelytics_api
+            - generic [ref=e405]: No packages published
+          - generic [ref=e407]:
+            - heading "Contributors 1" [level=2] [ref=e408]:
+              - link "Contributors 1" [ref=e409] [cursor=pointer]:
+                - /url: /Bluelytics/bluelytics_api/graphs/contributors
+                - text: Contributors
+                - generic "1" [ref=e410]
+            - list [ref=e411]:
+              - listitem [ref=e412]:
+                - link "@sicarul" [ref=e413] [cursor=pointer]:
+                  - /url: https://github.com/sicarul
+                  - img "@sicarul" [ref=e414]
+                - link "sicarul Pablo Seibelt" [ref=e416] [cursor=pointer]:
+                  - /url: https://github.com/sicarul
+                  - strong [ref=e417]: sicarul
+                  - text: Pablo Seibelt
+          - generic [ref=e419]:
+            - heading "Languages" [level=2] [ref=e420]
+            - list [ref=e426]:
+              - listitem [ref=e427]:
+                - link "Go 95.5%" [ref=e428] [cursor=pointer]:
+                  - /url: /Bluelytics/bluelytics_api/search?l=go
+                  - img [ref=e429]
+                  - generic [ref=e431]: Go
+                  - generic [ref=e432]: 95.5%
+              - listitem [ref=e433]:
+                - link "Shell 3.3%" [ref=e434] [cursor=pointer]:
+                  - /url: /Bluelytics/bluelytics_api/search?l=shell
+                  - img [ref=e435]
+                  - generic [ref=e437]: Shell
+                  - generic [ref=e438]: 3.3%
+              - listitem [ref=e439]:
+                - link "Dockerfile 1.2%" [ref=e440] [cursor=pointer]:
+                  - /url: /Bluelytics/bluelytics_api/search?l=dockerfile
+                  - img [ref=e441]
+                  - generic [ref=e443]: Dockerfile
+                  - generic [ref=e444]: 1.2%
+  - contentinfo [ref=e446]:
+    - heading "Footer" [level=2] [ref=e447]
+    - generic [ref=e448]:
+      - generic [ref=e449]:
+        - link "GitHub Homepage" [ref=e450] [cursor=pointer]:
+          - /url: https://github.com
+          - img [ref=e451]
+        - generic [ref=e453]: © 2026 GitHub, Inc.
+      - navigation "Footer" [ref=e454]:
+        - heading "Footer navigation" [level=3] [ref=e455]
+        - list "Footer navigation" [ref=e456]:
+          - listitem [ref=e457]:
+            - link "Terms" [ref=e458] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+          - listitem [ref=e459]:
+            - link "Privacy" [ref=e460] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+          - listitem [ref=e461]:
+            - link "Security" [ref=e462] [cursor=pointer]:
+              - /url: https://github.com/security
+          - listitem [ref=e463]:
+            - link "Status" [ref=e464] [cursor=pointer]:
+              - /url: https://www.githubstatus.com/
+          - listitem [ref=e465]:
+            - link "Community" [ref=e466] [cursor=pointer]:
+              - /url: https://github.community/
+          - listitem [ref=e467]:
+            - link "Docs" [ref=e468] [cursor=pointer]:
+              - /url: https://docs.github.com/
+          - listitem [ref=e469]:
+            - link "Contact" [ref=e470] [cursor=pointer]:
+              - /url: https://support.github.com?tags=dotcom-footer
+          - listitem [ref=e471]:
+            - button "Manage cookies" [ref=e473] [cursor=pointer]
+          - listitem [ref=e474]:
+            - button "Do not share my personal information" [ref=e476] [cursor=pointer]

@@ -1,0 +1,529 @@
+- generic [ref=e2]:
+  - region
+  - generic [ref=e3]:
+    - link "Skip to content" [ref=e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner [ref=e6]:
+      - heading "Navigation Menu" [level=2] [ref=e7]
+      - generic [ref=e8]:
+        - link "Homepage" [ref=e10] [cursor=pointer]:
+          - /url: /
+          - img [ref=e11]
+        - generic [ref=e13]:
+          - navigation "Global" [ref=e16]:
+            - list [ref=e17]:
+              - listitem [ref=e18]:
+                - button "Platform" [ref=e20] [cursor=pointer]:
+                  - text: Platform
+                  - img [ref=e21]
+              - listitem [ref=e23]:
+                - button "Solutions" [ref=e25] [cursor=pointer]:
+                  - text: Solutions
+                  - img [ref=e26]
+              - listitem [ref=e28]:
+                - button "Resources" [ref=e30] [cursor=pointer]:
+                  - text: Resources
+                  - img [ref=e31]
+              - listitem [ref=e33]:
+                - button "Open Source" [ref=e35] [cursor=pointer]:
+                  - text: Open Source
+                  - img [ref=e36]
+              - listitem [ref=e38]:
+                - button "Enterprise" [ref=e40] [cursor=pointer]:
+                  - text: Enterprise
+                  - img [ref=e41]
+              - listitem [ref=e43]:
+                - link "Pricing" [ref=e44] [cursor=pointer]:
+                  - /url: https://github.com/pricing
+                  - generic [ref=e45]: Pricing
+          - generic [ref=e46]:
+            - button "Search or jump to…" [ref=e49] [cursor=pointer]:
+              - img [ref=e51]
+            - link "Sign in" [ref=e54] [cursor=pointer]:
+              - /url: /login?return_to=https%3A%2F%2Fgithub.com%2FBluelytics
+            - link "Sign up" [ref=e55] [cursor=pointer]:
+              - /url: /signup?ref_cta=Sign+up&ref_loc=header+logged+out&ref_page=%2F%3Corg-login%3E&source=header
+            - button "Appearance settings" [ref=e58] [cursor=pointer]:
+              - img
+  - main [ref=e61]:
+    - generic [ref=e62]:
+      - generic [ref=e63]:
+        - generic [ref=e65]:
+          - img "@Bluelytics" [ref=e67]
+          - generic [ref=e68]:
+            - heading "Bluelytics" [level=1] [ref=e69]
+            - generic [ref=e71]: Live analysis of the Dollar Blue
+            - list:
+              - listitem
+            - list [ref=e73]:
+              - listitem [ref=e74]:
+                - img [ref=e75]
+                - link "18 followers" [ref=e77] [cursor=pointer]:
+                  - /url: /orgs/Bluelytics/followers
+              - listitem [ref=e78]:
+                - img [ref=e79]
+                - text: Argentina
+              - listitem [ref=e81]:
+                - img [ref=e82]
+                - link "http://www.bluelytics.com.ar" [ref=e84] [cursor=pointer]:
+                  - /url: http://www.bluelytics.com.ar
+              - listitem [ref=e85]:
+                - img [ref=e86]
+                - link "pabloseibelt@sicarul.com" [ref=e88] [cursor=pointer]:
+                  - /url: mailto:pabloseibelt@sicarul.com
+        - navigation "Organization" [ref=e90]:
+          - list [ref=e92]:
+            - listitem [ref=e93]:
+              - link "Overview" [ref=e94] [cursor=pointer]:
+                - /url: /Bluelytics
+                - img [ref=e95]
+                - text: Overview
+            - listitem [ref=e97]:
+              - link "Repositories 8" [ref=e98] [cursor=pointer]:
+                - /url: /orgs/Bluelytics/repositories
+                - img [ref=e99]
+                - text: Repositories
+                - generic "Not available" [ref=e101]: "8"
+            - listitem [ref=e102]:
+              - link "Projects" [ref=e103] [cursor=pointer]:
+                - /url: /orgs/Bluelytics/projects
+                - img [ref=e104]
+                - text: Projects
+            - listitem [ref=e106]:
+              - link "Packages" [ref=e107] [cursor=pointer]:
+                - /url: /orgs/Bluelytics/packages
+                - img [ref=e108]
+                - text: Packages
+            - listitem [ref=e110]:
+              - link "People" [ref=e111] [cursor=pointer]:
+                - /url: /orgs/Bluelytics/people
+                - img [ref=e112]
+                - text: People
+      - generic [ref=e115]:
+        - generic [ref=e118]:
+          - generic [ref=e119]:
+            - heading "Popular repositories Loading" [level=2] [ref=e120]:
+              - text: Popular repositories
+              - generic [ref=e121]: Loading
+              - status
+            - list [ref=e122]:
+              - listitem [ref=e123]:
+                - generic [ref=e125]:
+                  - generic [ref=e126]:
+                    - link "bluelytics_api" [ref=e128] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api
+                    - generic [ref=e130]: Public
+                  - paragraph [ref=e131]: API For bluelytics.com.ar
+                  - paragraph [ref=e132]:
+                    - generic [ref=e133]: Go
+                    - link "stars 9" [ref=e135] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api/stargazers
+                      - img "stars" [ref=e136]
+                      - text: "9"
+                    - link "fork 1" [ref=e138] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api/forks
+                      - img "fork" [ref=e139]
+                      - text: "1"
+              - listitem [ref=e141]:
+                - generic [ref=e143]:
+                  - generic [ref=e144]:
+                    - link "bcra_scraper" [ref=e146] [cursor=pointer]:
+                      - /url: /Bluelytics/bcra_scraper
+                    - generic [ref=e148]: Public
+                  - paragraph [ref=e149]: Scraper for the Banco Central de la Republica Argentina (BCRA)
+                  - paragraph [ref=e150]:
+                    - generic [ref=e151]: Python
+                    - link "stars 4" [ref=e153] [cursor=pointer]:
+                      - /url: /Bluelytics/bcra_scraper/stargazers
+                      - img "stars" [ref=e154]
+                      - text: "4"
+                    - link "fork 1" [ref=e156] [cursor=pointer]:
+                      - /url: /Bluelytics/bcra_scraper/forks
+                      - img "fork" [ref=e157]
+                      - text: "1"
+              - listitem [ref=e159]:
+                - generic [ref=e161]:
+                  - generic [ref=e162]:
+                    - link "bluelytics" [ref=e164] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics
+                    - generic [ref=e166]: Public
+                  - paragraph [ref=e167]: Backend in Django for bluelytics --- LEGACY / DEPRECATED ---
+                  - paragraph [ref=e168]:
+                    - generic [ref=e169]: Shell
+                    - link "stars 3" [ref=e171] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics/stargazers
+                      - img "stars" [ref=e172]
+                      - text: "3"
+                    - link "fork 1" [ref=e174] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics/forks
+                      - img "fork" [ref=e175]
+                      - text: "1"
+              - listitem [ref=e177]:
+                - generic [ref=e179]:
+                  - generic [ref=e180]:
+                    - link "bluelytics_frontend" [ref=e182] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_frontend
+                    - generic [ref=e184]: Public
+                  - paragraph [ref=e185]: Frontend in Angular.js for Bluelytics
+                  - paragraph [ref=e186]:
+                    - generic [ref=e187]: HTML
+                    - link "stars 3" [ref=e189] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_frontend/stargazers
+                      - img "stars" [ref=e190]
+                      - text: "3"
+              - listitem [ref=e192]:
+                - generic [ref=e194]:
+                  - generic [ref=e195]:
+                    - link "bluescraper" [ref=e197] [cursor=pointer]:
+                      - /url: /Bluelytics/bluescraper
+                    - generic [ref=e199]: Public
+                  - paragraph [ref=e200]
+                  - paragraph [ref=e201]:
+                    - generic [ref=e202]: Python
+                    - link "stars 2" [ref=e204] [cursor=pointer]:
+                      - /url: /Bluelytics/bluescraper/stargazers
+                      - img "stars" [ref=e205]
+                      - text: "2"
+                    - link "fork 1" [ref=e207] [cursor=pointer]:
+                      - /url: /Bluelytics/bluescraper/forks
+                      - img "fork" [ref=e208]
+                      - text: "1"
+              - listitem [ref=e210]:
+                - generic [ref=e212]:
+                  - generic [ref=e213]:
+                    - link "blueforecast" [ref=e215] [cursor=pointer]:
+                      - /url: /Bluelytics/blueforecast
+                    - generic [ref=e217]: Public
+                  - paragraph [ref=e218]: Forecasting for bluelytics
+                  - paragraph [ref=e219]:
+                    - generic [ref=e220]: R
+                    - link "star 1" [ref=e222] [cursor=pointer]:
+                      - /url: /Bluelytics/blueforecast/stargazers
+                      - img "star" [ref=e223]
+                      - text: "1"
+                    - link "fork 1" [ref=e225] [cursor=pointer]:
+                      - /url: /Bluelytics/blueforecast/forks
+                      - img "fork" [ref=e226]
+                      - text: "1"
+          - generic [ref=e229]:
+            - heading "Repositories" [level=3] [ref=e230]:
+              - img [ref=e231]
+              - text: Repositories
+            - search [ref=e235]:
+              - generic [ref=e236]:
+                - generic [ref=e237]:
+                  - searchbox "Find a repository…" [ref=e238]
+                  - img [ref=e239]
+                  - generic [ref=e241]: Loading
+                - generic [ref=e242]:
+                  - group [ref=e243]:
+                    - button "Type" [ref=e244] [cursor=pointer]: Type
+                  - group [ref=e246]:
+                    - button "Language" [ref=e247] [cursor=pointer]: Language
+                  - group [ref=e249]:
+                    - button "Sort" [ref=e250] [cursor=pointer]: Sort
+            - generic [ref=e253]:
+              - generic [ref=e254]: Showing 8 of 8 repositories
+              - list [ref=e256]:
+                - listitem [ref=e257]:
+                  - generic [ref=e258]:
+                    - generic [ref=e259]:
+                      - generic [ref=e260]:
+                        - link "bluescraper" [ref=e261] [cursor=pointer]:
+                          - /url: /Bluelytics/bluescraper
+                        - 'generic "Label: Public" [ref=e262]': Public
+                      - link "Bluelytics/bluescraper’s past year of commit activity" [ref=e264] [cursor=pointer]:
+                        - /url: /Bluelytics/bluescraper/graphs/commit-activity
+                        - img [ref=e266]
+                    - generic [ref=e269]:
+                      - generic [ref=e270]: Python
+                      - link "2 stars" [ref=e272] [cursor=pointer]:
+                        - /url: /Bluelytics/bluescraper/stargazers
+                        - img [ref=e273]
+                        - text: "2"
+                      - generic [ref=e275]:
+                        - img [ref=e276]
+                        - text: AGPL-3.0
+                      - link "1 fork" [ref=e278] [cursor=pointer]:
+                        - /url: /Bluelytics/bluescraper/forks
+                        - img [ref=e279]
+                        - text: "1"
+                      - link "1 issue" [ref=e281] [cursor=pointer]:
+                        - /url: /Bluelytics/bluescraper/issues
+                        - img [ref=e282]
+                        - text: "1"
+                      - link "0 pull requests" [ref=e285] [cursor=pointer]:
+                        - /url: /Bluelytics/bluescraper/pulls
+                        - img [ref=e286]
+                        - text: "0"
+                      - generic [ref=e288]: Updated Sep 3, 2024on Sep 3, 2024
+                - listitem [ref=e289]:
+                  - generic [ref=e290]:
+                    - generic [ref=e291]:
+                      - generic [ref=e292]:
+                        - link "bluelytics_frontend" [ref=e293] [cursor=pointer]:
+                          - /url: /Bluelytics/bluelytics_frontend
+                        - 'generic "Label: Public" [ref=e294]': Public
+                        - paragraph [ref=e295]: Frontend in Angular.js for Bluelytics
+                      - link "Bluelytics/bluelytics_frontend’s past year of commit activity" [ref=e297] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_frontend/graphs/commit-activity
+                        - img [ref=e299]
+                    - generic [ref=e302]:
+                      - generic [ref=e303]: HTML
+                      - link "3 stars" [ref=e305] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_frontend/stargazers
+                        - img [ref=e306]
+                        - text: "3"
+                      - generic [ref=e308]:
+                        - img [ref=e309]
+                        - text: AGPL-3.0
+                      - generic "0 forks" [ref=e311]:
+                        - img [ref=e312]
+                        - text: "0"
+                      - link "0 issues" [ref=e314] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_frontend/issues
+                        - img [ref=e315]
+                        - text: "0"
+                      - link "16 pull requests" [ref=e318] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_frontend/pulls
+                        - img [ref=e319]
+                        - text: "16"
+                      - generic [ref=e321]: Updated Dec 19, 2023on Dec 19, 2023
+                - listitem [ref=e322]:
+                  - generic [ref=e323]:
+                    - generic [ref=e324]:
+                      - generic [ref=e325]:
+                        - link "bluelytics_api" [ref=e326] [cursor=pointer]:
+                          - /url: /Bluelytics/bluelytics_api
+                        - 'generic "Label: Public" [ref=e327]': Public
+                        - paragraph [ref=e328]: API For bluelytics.com.ar
+                      - link "Bluelytics/bluelytics_api’s past year of commit activity" [ref=e330] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/graphs/commit-activity
+                        - img [ref=e332]
+                    - generic [ref=e335]:
+                      - generic [ref=e336]: Go
+                      - link "9 stars" [ref=e338] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/stargazers
+                        - img [ref=e339]
+                        - text: "9"
+                      - link "1 fork" [ref=e341] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/forks
+                        - img [ref=e342]
+                        - text: "1"
+                      - link "2 issues" [ref=e344] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/issues
+                        - img [ref=e345]
+                        - text: "2"
+                      - link "0 pull requests" [ref=e348] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_api/pulls
+                        - img [ref=e349]
+                        - text: "0"
+                      - generic [ref=e351]: Updated Nov 4, 2023on Nov 3, 2023
+                - listitem [ref=e352]:
+                  - generic [ref=e353]:
+                    - generic [ref=e354]:
+                      - generic [ref=e355]:
+                        - link "blueforecast" [ref=e356] [cursor=pointer]:
+                          - /url: /Bluelytics/blueforecast
+                        - 'generic "Label: Public" [ref=e357]': Public
+                        - paragraph [ref=e358]: Forecasting for bluelytics
+                      - link "Bluelytics/blueforecast’s past year of commit activity" [ref=e360] [cursor=pointer]:
+                        - /url: /Bluelytics/blueforecast/graphs/commit-activity
+                        - img [ref=e362]
+                    - generic [ref=e365]:
+                      - generic [ref=e366]: R
+                      - link "1 star" [ref=e368] [cursor=pointer]:
+                        - /url: /Bluelytics/blueforecast/stargazers
+                        - img [ref=e369]
+                        - text: "1"
+                      - link "1 fork" [ref=e371] [cursor=pointer]:
+                        - /url: /Bluelytics/blueforecast/forks
+                        - img [ref=e372]
+                        - text: "1"
+                      - link "0 issues" [ref=e374] [cursor=pointer]:
+                        - /url: /Bluelytics/blueforecast/issues
+                        - img [ref=e375]
+                        - text: "0"
+                      - link "0 pull requests" [ref=e378] [cursor=pointer]:
+                        - /url: /Bluelytics/blueforecast/pulls
+                        - img [ref=e379]
+                        - text: "0"
+                      - generic [ref=e381]: Updated Sep 5, 2018on Sep 5, 2018
+                - listitem [ref=e382]:
+                  - generic [ref=e383]:
+                    - generic [ref=e384]:
+                      - generic [ref=e385]:
+                        - link "bcra_scraper" [ref=e386] [cursor=pointer]:
+                          - /url: /Bluelytics/bcra_scraper
+                        - 'generic "Label: Public" [ref=e387]': Public
+                        - paragraph [ref=e388]: Scraper for the Banco Central de la Republica Argentina (BCRA)
+                      - link "Bluelytics/bcra_scraper’s past year of commit activity" [ref=e390] [cursor=pointer]:
+                        - /url: /Bluelytics/bcra_scraper/graphs/commit-activity
+                        - img [ref=e392]
+                    - generic [ref=e395]:
+                      - generic [ref=e396]: Python
+                      - link "4 stars" [ref=e398] [cursor=pointer]:
+                        - /url: /Bluelytics/bcra_scraper/stargazers
+                        - img [ref=e399]
+                        - text: "4"
+                      - link "1 fork" [ref=e401] [cursor=pointer]:
+                        - /url: /Bluelytics/bcra_scraper/forks
+                        - img [ref=e402]
+                        - text: "1"
+                      - link "0 issues" [ref=e404] [cursor=pointer]:
+                        - /url: /Bluelytics/bcra_scraper/issues
+                        - img [ref=e405]
+                        - text: "0"
+                      - link "0 pull requests" [ref=e408] [cursor=pointer]:
+                        - /url: /Bluelytics/bcra_scraper/pulls
+                        - img [ref=e409]
+                        - text: "0"
+                      - generic [ref=e411]: Updated Sep 17, 2016on Sep 16, 2016
+                - listitem [ref=e412]:
+                  - generic [ref=e413]:
+                    - generic [ref=e414]:
+                      - generic [ref=e415]:
+                        - link "bluebot" [ref=e416] [cursor=pointer]:
+                          - /url: /Bluelytics/bluebot
+                        - 'generic "Label: Public" [ref=e417]': Public
+                        - paragraph [ref=e418]: Telegram bot for bluelytics
+                      - link "Bluelytics/bluebot’s past year of commit activity" [ref=e420] [cursor=pointer]:
+                        - /url: /Bluelytics/bluebot/graphs/commit-activity
+                        - img [ref=e422]
+                    - generic [ref=e425]:
+                      - generic [ref=e426]: Python
+                      - generic "0 stars" [ref=e428]:
+                        - img [ref=e429]
+                        - text: "0"
+                      - generic "0 forks" [ref=e431]:
+                        - img [ref=e432]
+                        - text: "0"
+                      - link "0 issues" [ref=e434] [cursor=pointer]:
+                        - /url: /Bluelytics/bluebot/issues
+                        - img [ref=e435]
+                        - text: "0"
+                      - link "0 pull requests" [ref=e438] [cursor=pointer]:
+                        - /url: /Bluelytics/bluebot/pulls
+                        - img [ref=e439]
+                        - text: "0"
+                      - generic [ref=e441]: Updated Mar 10, 2016on Mar 10, 2016
+                - listitem [ref=e442]:
+                  - generic [ref=e443]:
+                    - generic [ref=e444]:
+                      - generic [ref=e445]:
+                        - link "bluelytics" [ref=e446] [cursor=pointer]:
+                          - /url: /Bluelytics/bluelytics
+                        - 'generic "Label: Public" [ref=e447]': Public
+                        - paragraph [ref=e448]: Backend in Django for bluelytics --- LEGACY / DEPRECATED ---
+                      - link "Bluelytics/bluelytics’s past year of commit activity" [ref=e450] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics/graphs/commit-activity
+                        - img [ref=e452]
+                    - generic [ref=e455]:
+                      - generic [ref=e456]: Shell
+                      - link "3 stars" [ref=e458] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics/stargazers
+                        - img [ref=e459]
+                        - text: "3"
+                      - generic [ref=e461]:
+                        - img [ref=e462]
+                        - text: AGPL-3.0
+                      - link "1 fork" [ref=e464] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics/forks
+                        - img [ref=e465]
+                        - text: "1"
+                      - link "0 issues" [ref=e467] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics/issues
+                        - img [ref=e468]
+                        - text: "0"
+                      - link "0 pull requests" [ref=e471] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics/pulls
+                        - img [ref=e472]
+                        - text: "0"
+                      - generic [ref=e474]: Updated Aug 24, 2015on Aug 24, 2015
+                - listitem [ref=e475]:
+                  - generic [ref=e476]:
+                    - generic [ref=e477]:
+                      - generic [ref=e478]:
+                        - link "bluelytics_mobile" [ref=e479] [cursor=pointer]:
+                          - /url: /Bluelytics/bluelytics_mobile
+                        - 'generic "Label: Public" [ref=e480]': Public
+                        - paragraph [ref=e481]: Mobile APP for bluelytics - LEGACY / DEPRECATED -
+                      - link "Bluelytics/bluelytics_mobile’s past year of commit activity" [ref=e483] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_mobile/graphs/commit-activity
+                        - img [ref=e485]
+                    - generic [ref=e488]:
+                      - generic [ref=e489]: JavaScript
+                      - generic "0 stars" [ref=e491]:
+                        - img [ref=e492]
+                        - text: "0"
+                      - generic "0 forks" [ref=e494]:
+                        - img [ref=e495]
+                        - text: "0"
+                      - link "0 issues" [ref=e497] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_mobile/issues
+                        - img [ref=e498]
+                        - text: "0"
+                      - link "0 pull requests" [ref=e501] [cursor=pointer]:
+                        - /url: /Bluelytics/bluelytics_mobile/pulls
+                        - img [ref=e502]
+                        - text: "0"
+                      - generic [ref=e504]: Updated Jan 23, 2015on Jan 23, 2015
+        - generic [ref=e506]:
+          - generic [ref=e508]:
+            - link "People" [ref=e509] [cursor=pointer]:
+              - /url: /orgs/Bluelytics/people
+              - heading "People" [level=4] [ref=e510]
+            - paragraph [ref=e511]: This organization has no public members. You must be a member to see who’s a part of this organization.
+          - generic [ref=e513]:
+            - heading "Top languages" [level=4] [ref=e514]
+            - link "Python" [ref=e515] [cursor=pointer]:
+              - /url: /orgs/Bluelytics/repositories?language=python&type=all
+              - generic [ref=e516]: Python
+            - link "JavaScript" [ref=e518] [cursor=pointer]:
+              - /url: /orgs/Bluelytics/repositories?language=javascript&type=all
+              - generic [ref=e519]: JavaScript
+            - link "R" [ref=e521] [cursor=pointer]:
+              - /url: /orgs/Bluelytics/repositories?language=r&type=all
+              - generic [ref=e522]: R
+            - link "Go" [ref=e524] [cursor=pointer]:
+              - /url: /orgs/Bluelytics/repositories?language=go&type=all
+              - generic [ref=e525]: Go
+            - link "HTML" [ref=e527] [cursor=pointer]:
+              - /url: /orgs/Bluelytics/repositories?language=html&type=all
+              - generic [ref=e528]: HTML
+  - contentinfo [ref=e530]:
+    - heading "Footer" [level=2] [ref=e531]
+    - generic [ref=e532]:
+      - generic [ref=e533]:
+        - link "GitHub Homepage" [ref=e534] [cursor=pointer]:
+          - /url: https://github.com
+          - img [ref=e535]
+        - generic [ref=e537]: © 2026 GitHub, Inc.
+      - navigation "Footer" [ref=e538]:
+        - heading "Footer navigation" [level=3] [ref=e539]
+        - list "Footer navigation" [ref=e540]:
+          - listitem [ref=e541]:
+            - link "Terms" [ref=e542] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+          - listitem [ref=e543]:
+            - link "Privacy" [ref=e544] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+          - listitem [ref=e545]:
+            - link "Security" [ref=e546] [cursor=pointer]:
+              - /url: https://github.com/security
+          - listitem [ref=e547]:
+            - link "Status" [ref=e548] [cursor=pointer]:
+              - /url: https://www.githubstatus.com/
+          - listitem [ref=e549]:
+            - link "Community" [ref=e550] [cursor=pointer]:
+              - /url: https://github.community/
+          - listitem [ref=e551]:
+            - link "Docs" [ref=e552] [cursor=pointer]:
+              - /url: https://docs.github.com/
+          - listitem [ref=e553]:
+            - link "Contact" [ref=e554] [cursor=pointer]:
+              - /url: https://support.github.com?tags=dotcom-footer
+          - listitem [ref=e555]:
+            - button "Manage cookies" [ref=e557] [cursor=pointer]
+          - listitem [ref=e558]:
+            - button "Do not share my personal information" [ref=e560] [cursor=pointer]

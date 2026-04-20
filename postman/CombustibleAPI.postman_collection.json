@@ -1,0 +1,1245 @@
+{
+  "info": {
+    "name": "API Precios Combustible Argentina",
+    "description": "Colección completa para la API de precios de combustible desplegada en AWS Lambda.\n\nBase URL: {{base_url}}\n\nImportar junto con el environment 'CombustibleAPI.postman_environment.json'",
+    "_postman_id": "combustible-api-v2",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [],
+  "item": [
+    {
+      "name": "🔍 Info & Salud",
+      "description": "Endpoints de estado y metadatos de la API.",
+      "item": [
+        {
+          "name": "Root — Info de la API",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "Devuelve nombre, versión y lista de endpoints disponibles."
+          },
+          "response": [
+            {
+              "name": "OK",
+              "status": "OK",
+              "code": 200,
+              "originalRequest": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    ""
+                  ]
+                }
+              },
+              "body": "{\n  \"nombre\": \"API Precios Combustible Argentina\",\n  \"version\": \"2.0.0\",\n  \"docs\": \"/docs\",\n  \"endpoints\": [\"/info\",\"/health\",\"/provincias\",\"/localidades\",\"/precios\",\"/precios/cercanos\",\"/precios/baratos\",\"/precios/smart\"]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Estado del servicio y cantidad de localidades cacheadas en DynamoDB."
+          },
+          "response": [
+            {
+              "name": "OK",
+              "status": "OK",
+              "code": 200,
+              "originalRequest": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/health",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "health"
+                  ]
+                }
+              },
+              "body": "{\n  \"status\": \"ok\",\n  \"localidades_cacheadas\": 1127\n}"
+            }
+          ]
+        },
+        {
+          "name": "Dataset Info",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/info",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "info"
+              ]
+            },
+            "description": "Metadatos del dataset fuente: nombre, resource_id y fecha de última modificación."
+          },
+          "response": [
+            {
+              "name": "OK",
+              "status": "OK",
+              "code": 200,
+              "originalRequest": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/info",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "info"
+                  ]
+                }
+              },
+              "body": "{\n  \"dataset\": \"Precios en surtidor - Resolución 314/2016\",\n  \"fuente\": \"datos.energia.gob.ar\",\n  \"resource_id\": \"80ac25de-a44a-4445-9215-090cf55cfda5\",\n  \"last_modified\": \"2026-03-24T22:00:24.961262\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "📍 Ubicación",
+      "description": "Consulta de provincias y localidades con coordenadas.",
+      "item": [
+        {
+          "name": "Provincias",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/provincias",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "provincias"
+              ]
+            },
+            "description": "Lista todas las provincias disponibles en el dataset.\n\nNota: CABA aparece como 'CABA'. Usar siempre sin tildes (CORDOBA, no CÓRDOBA)."
+          },
+          "response": [
+            {
+              "name": "OK",
+              "status": "OK",
+              "code": 200,
+              "originalRequest": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/provincias",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "provincias"
+                  ]
+                }
+              },
+              "body": "{\n  \"total\": 24,\n  \"fuente\": \"cache\",\n  \"provincias\": [\"BUENOS AIRES\",\"CABA\",\"CATAMARCA\",\"CHACO\",\"CHUBUT\",\"CORDOBA\",\"CORRIENTES\",\"ENTRE RIOS\",\"FORMOSA\",\"JUJUY\",\"LA PAMPA\",\"LA RIOJA\",\"MENDOZA\",\"MISIONES\",\"NEUQUEN\",\"RIO NEGRO\",\"SALTA\",\"SAN JUAN\",\"SAN LUIS\",\"SANTA CRUZ\",\"SANTA FE\",\"SANTIAGO DEL ESTERO\",\"TIERRA DEL FUEGO\",\"TUCUMAN\"]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Localidades — Buenos Aires",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/localidades?provincia={{provincia}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "localidades"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "{{provincia}}",
+                  "description": "Nombre exacto sin tildes. Ej: BUENOS AIRES, CORDOBA, CABA"
+                }
+              ]
+            },
+            "description": "Devuelve todas las localidades de una provincia con coordenadas lat/lon.\n\nÚtil para poblar un <select> en el frontend."
+          },
+          "response": [
+            {
+              "name": "OK — Buenos Aires",
+              "status": "OK",
+              "code": 200,
+              "originalRequest": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/localidades?provincia=BUENOS+AIRES",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "localidades"
+                  ],
+                  "query": [
+                    {
+                      "key": "provincia",
+                      "value": "BUENOS AIRES"
+                    }
+                  ]
+                }
+              },
+              "body": "{\n  \"total\": 286,\n  \"localidades\": [\n    {\n      \"localidad\": \"MORON\",\n      \"provincia\": \"BUENOS AIRES\",\n      \"lat\": -34.65321,\n      \"lon\": -58.61953,\n      \"codigo_postal\": null\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Localidades — CABA",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/localidades?provincia=CABA",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "localidades"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "CABA"
+                }
+              ]
+            },
+            "description": "Localidades de Ciudad Autónoma de Buenos Aires.\n\nNota: el dataset tiene solo 'CAPITAL FEDERAL' como localidad dentro de CABA."
+          }
+        },
+        {
+          "name": "Localidades — Córdoba",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/localidades?provincia=CORDOBA",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "localidades"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "CORDOBA"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Localidades — Santa Fe",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/localidades?provincia=SANTA+FE",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "localidades"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "SANTA FE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "⛽ Precios",
+      "description": "Consulta de precios por zona administrativa.",
+      "item": [
+        {
+          "name": "Precios — por provincia",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios?provincia={{provincia}}&limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "{{provincia}}",
+                  "description": "Requerido. Ej: BUENOS AIRES"
+                },
+                {
+                  "key": "localidad",
+                  "value": "",
+                  "description": "Opcional. Ej: MORON",
+                  "disabled": true
+                },
+                {
+                  "key": "producto",
+                  "value": "",
+                  "description": "Opcional. Ej: Nafta (súper) entre 92 y 95 Ron",
+                  "disabled": true
+                },
+                {
+                  "key": "fecha_desde",
+                  "value": "",
+                  "description": "Opcional. YYYY-MM-DD",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "1–5000. Default: 1000"
+                }
+              ]
+            },
+            "description": "Estaciones filtradas por zona, ordenadas por precio ASC.\n\nParámetros:\n- `provincia` (requerido)\n- `localidad` (opcional)\n- `producto` (opcional, case-insensitive)\n- `fecha_desde` (opcional, YYYY-MM-DD)\n- `limit` (1–5000, default 1000)"
+          }
+        },
+        {
+          "name": "Precios — por provincia y localidad",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios?provincia={{provincia}}&localidad={{localidad}}&limit=100",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "{{provincia}}"
+                },
+                {
+                  "key": "localidad",
+                  "value": "{{localidad}}"
+                },
+                {
+                  "key": "producto",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "fecha_desde",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Precios — con filtro de producto",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios?provincia={{provincia}}&localidad={{localidad}}&producto=Nafta (súper) entre 92 y 95 Ron&limit=100",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "{{provincia}}"
+                },
+                {
+                  "key": "localidad",
+                  "value": "{{localidad}}"
+                },
+                {
+                  "key": "producto",
+                  "value": "Nafta (súper) entre 92 y 95 Ron"
+                },
+                {
+                  "key": "fecha_desde",
+                  "value": "{{fecha_desde}}",
+                  "description": "Filtra precios vigentes desde esta fecha"
+                },
+                {
+                  "key": "limit",
+                  "value": "100"
+                }
+              ]
+            },
+            "description": "Productos válidos:\n- GNC\n- Gas Oil Grado 2\n- Gas Oil Grado 3\n- Nafta (súper) entre 92 y 95 Ron\n- Nafta (premium) de más de 95 Ron\n\nEl filtro es case-insensitive."
+          }
+        },
+        {
+          "name": "Precios — CABA (Capital Federal)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios?provincia=CABA&limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "CABA"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Nota: el dataset almacena la localidad como 'CAPITAL FEDERAL' pero provincia = 'CABA'."
+          }
+        },
+        {
+          "name": "Precios — Rosario con nafta",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios?provincia=SANTA+FE&localidad=ROSARIO&producto=Nafta (súper) entre 92 y 95 Ron",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "SANTA FE"
+                },
+                {
+                  "key": "localidad",
+                  "value": "ROSARIO"
+                },
+                {
+                  "key": "producto",
+                  "value": "Nafta (súper) entre 92 y 95 Ron"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🗺️ Precios por Radio GPS",
+      "description": "Búsqueda por coordenadas y radio kilométrico.",
+      "item": [
+        {
+          "name": "Cercanos — Radio 5km",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/cercanos?lat={{lat}}&lon={{lon}}&radio_km=5&provincia={{provincia}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "cercanos"
+              ],
+              "query": [
+                {
+                  "key": "lat",
+                  "value": "{{lat}}",
+                  "description": "Latitud GPS (requerido)"
+                },
+                {
+                  "key": "lon",
+                  "value": "{{lon}}",
+                  "description": "Longitud GPS (requerido)"
+                },
+                {
+                  "key": "radio_km",
+                  "value": "5",
+                  "description": "Radio en km. Default: 5.0"
+                },
+                {
+                  "key": "provincia",
+                  "value": "{{provincia}}",
+                  "description": "Requerido para pre-filtrar el dataset"
+                },
+                {
+                  "key": "localidad",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "producto",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "fecha_desde",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "500",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Estaciones dentro del radio especificado, ordenadas por distancia ASC.\n\n⚠️ Requiere `provincia` además de las coordenadas.\nPara resolución automática de provincia usar `/precios/smart`."
+          },
+          "response": [
+            {
+              "name": "OK",
+              "status": "OK",
+              "code": 200,
+              "originalRequest": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/precios/cercanos?lat=-34.615&lon=-58.832&radio_km=5&provincia=BUENOS+AIRES"
+                }
+              },
+              "body": "{\n  \"total\": 4,\n  \"radio_km\": 5.0,\n  \"estaciones\": [\n    {\n      \"empresa\": \"DÍAZ CARLOS ALBERTO\",\n      \"direccion\": \"Av San Martin 7861\",\n      \"localidad\": \"LA REJA\",\n      \"provincia\": \"BUENOS AIRES\",\n      \"latitud\": -34.630746,\n      \"longitud\": -58.856544,\n      \"producto\": \"Gas Oil Grado 2\",\n      \"precio\": 1039,\n      \"fecha_vigencia\": \"2024-06-06T15:29:00\",\n      \"distancia_km\": 2.74\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Cercanos — Radio 10km con producto",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/cercanos?lat={{lat}}&lon={{lon}}&radio_km=10&provincia={{provincia}}&producto=Nafta (súper) entre 92 y 95 Ron",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "cercanos"
+              ],
+              "query": [
+                {
+                  "key": "lat",
+                  "value": "{{lat}}"
+                },
+                {
+                  "key": "lon",
+                  "value": "{{lon}}"
+                },
+                {
+                  "key": "radio_km",
+                  "value": "10"
+                },
+                {
+                  "key": "provincia",
+                  "value": "{{provincia}}"
+                },
+                {
+                  "key": "producto",
+                  "value": "Nafta (súper) entre 92 y 95 Ron"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Baratos — Top 10 zona",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/baratos?provincia={{provincia}}&localidad={{localidad}}&top=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "baratos"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "{{provincia}}"
+                },
+                {
+                  "key": "localidad",
+                  "value": "{{localidad}}"
+                },
+                {
+                  "key": "top",
+                  "value": "10",
+                  "description": "1–100. Default: 10"
+                },
+                {
+                  "key": "producto",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "fecha_desde",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Las N estaciones más baratas para la zona.\n\n⚠️ Siempre pasar `producto` para resultados útiles. Sin filtro puede devolver GNC primero."
+          }
+        },
+        {
+          "name": "Baratos — Top 5 nafta super",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/baratos?provincia={{provincia}}&localidad={{localidad}}&producto=Nafta (súper) entre 92 y 95 Ron&top=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "baratos"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "{{provincia}}"
+                },
+                {
+                  "key": "localidad",
+                  "value": "{{localidad}}"
+                },
+                {
+                  "key": "producto",
+                  "value": "Nafta (súper) entre 92 y 95 Ron"
+                },
+                {
+                  "key": "top",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Baratos — Top 5 gasoil",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/baratos?provincia={{provincia}}&localidad={{localidad}}&producto=Gas Oil Grado 2&top=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "baratos"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "{{provincia}}"
+                },
+                {
+                  "key": "localidad",
+                  "value": "{{localidad}}"
+                },
+                {
+                  "key": "producto",
+                  "value": "Gas Oil Grado 2"
+                },
+                {
+                  "key": "top",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🧠 Smart — Ubicación Automática",
+      "description": "Endpoint principal del frontend. Detecta la ubicación del usuario automáticamente (GPS → sesión → IP) y devuelve las estaciones más cercanas.",
+      "item": [
+        {
+          "name": "Smart — GPS exacto",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/smart?lat={{lat}}&lon={{lon}}&radio_km={{radio_km}}&limit=500",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "smart"
+              ],
+              "query": [
+                {
+                  "key": "lat",
+                  "value": "{{lat}}",
+                  "description": "Latitud GPS del usuario"
+                },
+                {
+                  "key": "lon",
+                  "value": "{{lon}}",
+                  "description": "Longitud GPS del usuario"
+                },
+                {
+                  "key": "radio_km",
+                  "value": "{{radio_km}}",
+                  "description": "Radio de búsqueda en km. Default: 10"
+                },
+                {
+                  "key": "producto",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "fecha_desde",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "500"
+                }
+              ]
+            },
+            "description": "Caso 1: el usuario concedió permiso de GPS.\n\nLa API:\n1. Llama a Nominatim (OSM) para reverse geocoding → detecta localidad y provincia\n2. Guarda las coords en sesión por 1 hora\n3. Devuelve estaciones dentro del radio, ordenadas por distancia\n\nRespuesta incluye `ubicacion_resuelta.geocoded: true` y `localidad_detectada`."
+          },
+          "response": [
+            {
+              "name": "OK — GPS La Reja",
+              "status": "OK",
+              "code": 200,
+              "originalRequest": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/precios/smart?lat=-34.615&lon=-58.832&radio_km=10&limit=500"
+                }
+              },
+              "body": "{\n  \"ubicacion_resuelta\": {\n    \"method\": \"gps\",\n    \"precision\": \"exacta\",\n    \"lat\": -34.61557837743971,\n    \"lon\": -58.832944581843975,\n    \"localidad\": \"LA REJA\",\n    \"provincia\": \"BUENOS AIRES\",\n    \"geocoded\": true,\n    \"localidad_detectada\": \"LA REJA\",\n    \"localidad_dataset\": \"LA REJA\",\n    \"distancia_dataset_km\": 2.7,\n    \"advertencia_fecha\": null,\n    \"radio_ampliado\": null,\n    \"provincia_ajustada\": null,\n    \"nota\": null\n  },\n  \"total\": 27,\n  \"estaciones\": [\n    {\n      \"empresa\": \"DÍAZ CARLOS ALBERTO\",\n      \"direccion\": \"Av San Martin 7861\",\n      \"localidad\": \"LA REJA\",\n      \"provincia\": \"BUENOS AIRES\",\n      \"latitud\": -34.630746,\n      \"longitud\": -58.856544,\n      \"producto\": \"Gas Oil Grado 2\",\n      \"precio\": 1039,\n      \"fecha_vigencia\": \"2024-06-06T15:29:00\",\n      \"distancia_km\": 2.74\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Smart — GPS + producto + fecha",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/smart?lat={{lat}}&lon={{lon}}&radio_km={{radio_km}}&producto=Nafta (súper) entre 92 y 95 Ron&fecha_desde={{fecha_desde}}&limit=500",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "smart"
+              ],
+              "query": [
+                {
+                  "key": "lat",
+                  "value": "{{lat}}"
+                },
+                {
+                  "key": "lon",
+                  "value": "{{lon}}"
+                },
+                {
+                  "key": "radio_km",
+                  "value": "{{radio_km}}"
+                },
+                {
+                  "key": "producto",
+                  "value": "Nafta (súper) entre 92 y 95 Ron"
+                },
+                {
+                  "key": "fecha_desde",
+                  "value": "{{fecha_desde}}",
+                  "description": "Si no hay precios recientes en el radio, la API devuelve los últimos disponibles con advertencia_fecha"
+                },
+                {
+                  "key": "limit",
+                  "value": "500"
+                }
+              ]
+            },
+            "description": "GPS con filtro de producto y fecha.\n\nGraceful degradation de fecha: si no hay precios recientes cerca, la API devuelve igualmente las estaciones dentro del radio con los últimos precios disponibles y un aviso en `ubicacion_resuelta.advertencia_fecha`."
+          }
+        },
+        {
+          "name": "Smart — Solo IP (sin GPS)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/smart?radio_km={{radio_km}}&limit=500",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "smart"
+              ],
+              "query": [
+                {
+                  "key": "radio_km",
+                  "value": "{{radio_km}}"
+                },
+                {
+                  "key": "producto",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "fecha_desde",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "500"
+                }
+              ]
+            },
+            "description": "Caso 2: el usuario NO dio permiso de GPS.\n\nLa API:\n1. Si hay sesión GPS previa (1h) → reutiliza coords (`method: ip_cache, precision: exacta`)\n2. Si no → geolocaliza por IP (`method: ip_geo, precision: aproximada`)\n\nCon IP geo el resultado puede ser impreciso: ISPs del GBA apuntan a CABA.\nEl frontend debe mostrar un banner 'Ubicación aproximada' cuando `precision !== 'exacta'`."
+          }
+        },
+        {
+          "name": "Smart — Manual provincia + localidad",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/smart?provincia={{provincia}}&localidad={{localidad}}&limit=500",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "smart"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "{{provincia}}",
+                  "description": "Sobrescribe detección automática"
+                },
+                {
+                  "key": "localidad",
+                  "value": "{{localidad}}",
+                  "description": "Sobrescribe detección automática"
+                },
+                {
+                  "key": "producto",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "500"
+                }
+              ]
+            },
+            "description": "Caso 3: el usuario seleccionó manualmente provincia y localidad.\n\nCuando ambos se pasan explícitamente, la API los usa directamente sin consultar la sesión cacheada (`method: localidad`)."
+          }
+        },
+        {
+          "name": "Smart — GPS + radio 15km + fecha",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/smart?lat={{lat}}&lon={{lon}}&radio_km=15&fecha_desde={{fecha_desde}}&limit=500",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "smart"
+              ],
+              "query": [
+                {
+                  "key": "lat",
+                  "value": "{{lat}}"
+                },
+                {
+                  "key": "lon",
+                  "value": "{{lon}}"
+                },
+                {
+                  "key": "radio_km",
+                  "value": "15"
+                },
+                {
+                  "key": "fecha_desde",
+                  "value": "{{fecha_desde}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "500"
+                }
+              ]
+            },
+            "description": "Replica exacta de la URL que usaba el frontend en Render:\n/precios/smart?lat=...&lon=...&radio_km=15&fecha_desde=2026-02-22&limit=500"
+          }
+        },
+        {
+          "name": "Smart — Rosario Santa Fe",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/smart?provincia=SANTA+FE&localidad=ROSARIO&radio_km=5&limit=500",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "smart"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "SANTA FE"
+                },
+                {
+                  "key": "localidad",
+                  "value": "ROSARIO"
+                },
+                {
+                  "key": "radio_km",
+                  "value": "5"
+                },
+                {
+                  "key": "limit",
+                  "value": "500"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Smart — CABA",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/smart?provincia=CABA&limit=500",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "smart"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "CABA"
+                },
+                {
+                  "key": "limit",
+                  "value": "500"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Smart — Córdoba capital",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/smart?provincia=CORDOBA&localidad=CORDOBA&radio_km=5&limit=500",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "smart"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "CORDOBA"
+                },
+                {
+                  "key": "localidad",
+                  "value": "CORDOBA"
+                },
+                {
+                  "key": "radio_km",
+                  "value": "5"
+                },
+                {
+                  "key": "limit",
+                  "value": "500"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Smart — GNC Mendoza",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/smart?provincia=MENDOZA&localidad=MENDOZA&producto=GNC&limit=200",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "smart"
+              ],
+              "query": [
+                {
+                  "key": "provincia",
+                  "value": "MENDOZA"
+                },
+                {
+                  "key": "localidad",
+                  "value": "MENDOZA"
+                },
+                {
+                  "key": "producto",
+                  "value": "GNC"
+                },
+                {
+                  "key": "limit",
+                  "value": "200"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📈 Tendencia Histórica",
+      "description": "Serie de precios históricos por localidad y producto. El scraper acumula datos diariamente desde el 24/03/2026.",
+      "item": [
+        {
+          "name": "Tendencia — Morón nafta super",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/tendencia?localidad=MORON&provincia=BUENOS+AIRES&producto=Nafta (súper) entre 92 y 95 Ron",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "tendencia"
+              ],
+              "query": [
+                {
+                  "key": "localidad",
+                  "value": "MORON",
+                  "description": "Requerido. Uppercase sin tildes"
+                },
+                {
+                  "key": "provincia",
+                  "value": "BUENOS AIRES",
+                  "description": "Requerido"
+                },
+                {
+                  "key": "producto",
+                  "value": "Nafta (súper) entre 92 y 95 Ron",
+                  "description": "Requerido. Case-insensitive"
+                },
+                {
+                  "key": "fecha_desde",
+                  "value": "",
+                  "description": "Opcional. YYYY-MM-DD. Default: hoy-30 días",
+                  "disabled": true
+                },
+                {
+                  "key": "fecha_hasta",
+                  "value": "",
+                  "description": "Opcional. YYYY-MM-DD. Default: hoy",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Serie histórica de precio mínimo por día.\n\nRespuesta incluye:\n- precio_actual, precio_minimo, precio_maximo del período\n- variacion_pct: % de cambio entre primer y último día\n- tendencia[]: un item por día\n\nNota: `total_dias` crece 1 por día desde el deploy (24/03/2026)."
+          },
+          "response": [
+            {
+              "name": "OK",
+              "status": "OK",
+              "code": 200,
+              "originalRequest": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/precios/tendencia?localidad=MORON&provincia=BUENOS+AIRES&producto=Nafta (súper) entre 92 y 95 Ron"
+                }
+              },
+              "body": "{\n  \"localidad\": \"MORON\",\n  \"provincia\": \"BUENOS AIRES\",\n  \"producto\": \"NAFTA (SÚPER) ENTRE 92 Y 95 RON\",\n  \"fecha_desde\": \"2026-02-24\",\n  \"fecha_hasta\": \"2026-03-24\",\n  \"total_dias\": 28,\n  \"precio_actual\": 1176.0,\n  \"precio_minimo\": 1089.0,\n  \"precio_maximo\": 1176.0,\n  \"variacion_pct\": 7.99,\n  \"tendencia\": [\n    { \"fecha\": \"2026-02-24\", \"precio\": 1089.0, \"empresa\": \"RIDWAY S.A.\", \"bandera\": null },\n    { \"fecha\": \"2026-03-24\", \"precio\": 1176.0, \"empresa\": \"RIDWAY S.A.\", \"bandera\": null }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "Tendencia — Morón gas oil",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/tendencia?localidad=MORON&provincia=BUENOS+AIRES&producto=Gas Oil Grado 2",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "tendencia"
+              ],
+              "query": [
+                {
+                  "key": "localidad",
+                  "value": "MORON"
+                },
+                {
+                  "key": "provincia",
+                  "value": "BUENOS AIRES"
+                },
+                {
+                  "key": "producto",
+                  "value": "Gas Oil Grado 2"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tendencia — Rosario nafta premium",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/tendencia?localidad=ROSARIO&provincia=SANTA+FE&producto=Nafta (premium) de más de 95 Ron",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "tendencia"
+              ],
+              "query": [
+                {
+                  "key": "localidad",
+                  "value": "ROSARIO"
+                },
+                {
+                  "key": "provincia",
+                  "value": "SANTA FE"
+                },
+                {
+                  "key": "producto",
+                  "value": "Nafta (premium) de más de 95 Ron"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tendencia — Córdoba rango personalizado",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/tendencia?localidad=CORDOBA&provincia=CORDOBA&producto=Nafta (súper) entre 92 y 95 Ron&fecha_desde={{fecha_desde}}&fecha_hasta={{fecha_hasta}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "tendencia"
+              ],
+              "query": [
+                {
+                  "key": "localidad",
+                  "value": "CORDOBA"
+                },
+                {
+                  "key": "provincia",
+                  "value": "CORDOBA"
+                },
+                {
+                  "key": "producto",
+                  "value": "Nafta (súper) entre 92 y 95 Ron"
+                },
+                {
+                  "key": "fecha_desde",
+                  "value": "{{fecha_desde}}"
+                },
+                {
+                  "key": "fecha_hasta",
+                  "value": "{{fecha_hasta}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tendencia — GNC Morón",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/precios/tendencia?localidad=MORON&provincia=BUENOS+AIRES&producto=GNC",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "precios",
+                "tendencia"
+              ],
+              "query": [
+                {
+                  "key": "localidad",
+                  "value": "MORON"
+                },
+                {
+                  "key": "provincia",
+                  "value": "BUENOS AIRES"
+                },
+                {
+                  "key": "producto",
+                  "value": "GNC"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

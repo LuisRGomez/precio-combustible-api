@@ -1,0 +1,101 @@
+{
+  "api": {
+    "resource_id": "80ac25de-a44a-4445-9215-090cf55cfda5",
+    "base_url": "http://datos.energia.gob.ar/api/3/action/datastore_search",
+    "usar_datos_locales": false,
+    "limit": 1000,
+    "timeout": 60,
+    "filtros": {
+      "provincia": "BUENOS AIRES",
+      "localidad": "MORENO"
+    }
+  },
+  "datos_locales": {
+    "estaciones": [
+      {
+        "empresa": "YPF",
+        "direccion": "Ruta 5 km 35",
+        "producto": "Nafta 95",
+        "precio": 2.15,
+        "latitud": -34.630,
+        "longitud": -58.845,
+        "provincia": "BUENOS AIRES",
+        "localidad": "MORENO",
+        "fecha_vigencia": "2026-03-23"
+      },
+      {
+        "empresa": "Shell",
+        "direccion": "Avenida General Paz 1500",
+        "producto": "Nafta 95",
+        "precio": 2.18,
+        "latitud": -34.635,
+        "longitud": -58.850,
+        "provincia": "BUENOS AIRES",
+        "localidad": "MORENO",
+        "fecha_vigencia": "2026-03-23"
+      },
+      {
+        "empresa": "Petrobras",
+        "direccion": "Ruta 3 km 25",
+        "producto": "Nafta 95",
+        "precio": 2.12,
+        "latitud": -34.640,
+        "longitud": -58.855,
+        "provincia": "BUENOS AIRES",
+        "localidad": "MORENO",
+        "fecha_vigencia": "2026-03-23"
+      },
+      {
+        "empresa": "ACA",
+        "direccion": "Moreno 450",
+        "producto": "Nafta 95",
+        "precio": 2.20,
+        "latitud": -34.632,
+        "longitud": -58.848,
+        "provincia": "BUENOS AIRES",
+        "localidad": "MORENO",
+        "fecha_vigencia": "2026-03-23"
+      },
+      {
+        "empresa": "YPF",
+        "direccion": "Avenida San Martín 800",
+        "producto": "Diesel",
+        "precio": 2.35,
+        "latitud": -34.631,
+        "longitud": -58.843,
+        "provincia": "BUENOS AIRES",
+        "localidad": "MORENO",
+        "fecha_vigencia": "2026-03-23"
+      },
+      {
+        "empresa": "Shell",
+        "direccion": "Ruta 2 km 40",
+        "producto": "Diesel",
+        "precio": 2.38,
+        "latitud": -34.638,
+        "longitud": -58.852,
+        "provincia": "BUENOS AIRES",
+        "localidad": "MORENO",
+        "fecha_vigencia": "2026-03-23"
+      },
+      {
+        "empresa": "Petrobras",
+        "direccion": "Camino a La Reja 200",
+        "producto": "Nafta 95",
+        "precio": 2.14,
+        "latitud": -34.634,
+        "longitud": -58.847,
+        "provincia": "BUENOS AIRES",
+        "localidad": "MORENO",
+        "fecha_vigencia": "2026-03-23"
+      }
+    ]
+  },
+  "busqueda": {
+    "provincia": "BUENOS AIRES",
+    "localidad": "MORENO",
+    "latitud_usuario": -34.634,
+    "longitud_usuario": -58.847,
+    "radio_km": 5
+  }
+}

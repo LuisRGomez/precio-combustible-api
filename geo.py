@@ -132,10 +132,46 @@ def reverse_geocode(lat: float, lon: float) -> Optional[dict]:
 
 # ─── Geolocalización por IP ───────────────────────────────────────────────────
 
+def geolocate_cf_headers(headers: dict) -> Optional[dict]:
+    """
+    Extrae geolocalización desde los headers de Cloudflare (CF-IPCity, CF-IPLatitude,
+    CF-IPLongitude, CF-IPCountry). Mucho más preciso que ip-api.com porque Cloudflare
+    deriva la ubicación de datos de red propios (BGP, latencia, anycast).
+    Solo retorna si el país es AR (Argentina).
+    """
+    country = headers.get("CF-IPCountry", "").upper()
+    if country not in ("AR", ""):
+        return None  # usuario fuera de Argentina
+
+    city = headers.get("CF-IPCity", "").strip()
+    region = headers.get("CF-IPRegion", "").strip()
+
+    try:
+        lat = float(headers.get("CF-IPLatitude", "") or 0)
+        lon = float(headers.get("CF-IPLongitude", "") or 0)
+    except (ValueError, TypeError):
+        lat, lon = 0.0, 0.0
+
+    if not lat and not lon and not city:
+        return None  # CF headers presentes pero vacíos — no estamos detrás de CF
+
+    # CF-IPRegion trae el nombre de la provincia en español para Argentina
+    provincia = normalize_provincia(region) if region else ""
+
+    return {
+        "lat":      lat or None,
+        "lon":      lon or None,
+        "localidad":  city.upper() if city else "",
+        "provincia":  provincia,
+        "source":   "cf_headers",
+    }
+
+
 def geolocate_ip(ip: str) -> Optional[dict]:
     """
     Usa ip-api.com (gratis, 45 req/min sin key) para obtener ubicación aproximada.
     Solo devuelve resultado si la IP está en Argentina.
+    Usado como fallback cuando NO estamos detrás de Cloudflare.
     """
     if not ip or ip in ("127.0.0.1", "::1", "localhost"):
         return None
@@ -171,17 +207,19 @@ def resolve_location(
     db_get_session,
     db_save_session,
     db_get_localidad_coords,
+    cf_headers: Optional[dict] = None,
 ) -> dict:
     """
     Devuelve la mejor ubicación disponible con el nivel de precisión alcanzado.
 
     Cascada:
       1. GPS exacto (más preciso)
-      2. Caché de sesión por IP
-      3. Geolocalización por IP (ip-api.com)
-      4. Coordenadas de localidad desde SQLite
-      5. Capital de provincia (fallback administrativo)
-      6. Buenos Aires por defecto
+      2. Caché de sesión por IP (solo GPS previo)
+      3. Headers de Cloudflare CF-IPCity/CF-IPLatitude (más preciso que ip-api.com)
+      4. Geolocalización por IP (ip-api.com, fallback sin CF)
+      5. Coordenadas de localidad desde SQLite
+      6. Capital de provincia (fallback administrativo)
+      7. Buenos Aires por defecto
     """
 
     # 0. Si el usuario proporcionó provincia + localidad explícitamente, usarlas directo.
@@ -287,18 +325,34 @@ def resolve_location(
                     "provincia": session.get("provincia"),
                 }
 
-    # 3. Geolocalización en tiempo real por IP
+    # 3. Headers de Cloudflare (más preciso que ip-api.com — usa datos de red propios)
+    if cf_headers:
+        cf_geo = geolocate_cf_headers(cf_headers)
+        if cf_geo and (cf_geo.get("lat") or cf_geo.get("provincia")):
+            if ip:
+                db_save_session(ip, cf_geo.get("lat"), cf_geo.get("lon"),
+                                cf_geo.get("localidad"), cf_geo.get("provincia"), "cf")
+            return {
+                "method": "ip_geo",
+                "precision": "cf",
+                "lat": cf_geo.get("lat"),
+                "lon": cf_geo.get("lon"),
+                "localidad": cf_geo.get("localidad", ""),
+                "provincia": cf_geo.get("provincia", ""),
+            }
+
+    # 4. Geolocalización en tiempo real por IP (fallback cuando no hay CF)
     if ip:
-        geo = geolocate_ip(ip)
-        if geo:
-            db_save_session(ip, geo["lat"], geo["lon"], geo["localidad"], geo["provincia"], "ip")
+        geo_data = geolocate_ip(ip)
+        if geo_data:
+            db_save_session(ip, geo_data["lat"], geo_data["lon"], geo_data["localidad"], geo_data["provincia"], "ip")
             return {
                 "method": "ip_geo",
                 "precision": "aproximada",
-                "lat": geo["lat"],
-                "lon": geo["lon"],
-                "localidad": geo["localidad"],
-                "provincia": geo["provincia"],
+                "lat": geo_data["lat"],
+                "lon": geo_data["lon"],
+                "localidad": geo_data["localidad"],
+                "provincia": geo_data["provincia"],
             }
 
     # 4. Coords de localidad desde SQLite

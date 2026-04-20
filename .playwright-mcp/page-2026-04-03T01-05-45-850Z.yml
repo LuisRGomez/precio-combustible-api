@@ -1,0 +1,1912 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - region
+    - generic [ref=e3]:
+      - link "Skip to content" [ref=e4] [cursor=pointer]:
+        - /url: "#start-of-content"
+      - banner [ref=e6]:
+        - heading "Navigation Menu" [level=2] [ref=e7]
+        - generic [ref=e8]:
+          - link "Homepage" [ref=e10] [cursor=pointer]:
+            - /url: /
+            - img [ref=e11]
+          - generic [ref=e13]:
+            - navigation "Global" [ref=e16]:
+              - list [ref=e17]:
+                - listitem [ref=e18]:
+                  - button "Platform" [ref=e20] [cursor=pointer]:
+                    - text: Platform
+                    - img [ref=e21]
+                - listitem [ref=e23]:
+                  - button "Solutions" [ref=e25] [cursor=pointer]:
+                    - text: Solutions
+                    - img [ref=e26]
+                - listitem [ref=e28]:
+                  - button "Resources" [ref=e30] [cursor=pointer]:
+                    - text: Resources
+                    - img [ref=e31]
+                - listitem [ref=e33]:
+                  - button "Open Source" [ref=e35] [cursor=pointer]:
+                    - text: Open Source
+                    - img [ref=e36]
+                - listitem [ref=e38]:
+                  - button "Enterprise" [ref=e40] [cursor=pointer]:
+                    - text: Enterprise
+                    - img [ref=e41]
+                - listitem [ref=e43]:
+                  - link "Pricing" [ref=e44] [cursor=pointer]:
+                    - /url: https://github.com/pricing
+                    - generic [ref=e45]: Pricing
+            - generic [ref=e46]:
+              - button "Search or jump to…" [ref=e49] [cursor=pointer]:
+                - img [ref=e51]
+              - link "Sign in" [ref=e54] [cursor=pointer]:
+                - /url: /login?return_to=https%3A%2F%2Fgithub.com%2FBluelytics%2Fbluelytics_api%2Fblob%2Fmain%2Fv2.go
+              - link "Sign up" [ref=e55] [cursor=pointer]:
+                - /url: /signup?ref_cta=Sign+up&ref_loc=header+logged+out&ref_page=%2F%3Cuser-name%3E%2F%3Crepo-name%3E%2Fblob%2Fshow&source=header-repo&source_repo=Bluelytics%2Fbluelytics_api
+              - button "Appearance settings" [ref=e58] [cursor=pointer]:
+                - img
+    - main [ref=e62]:
+      - generic [ref=e63]:
+        - generic [ref=e64]:
+          - generic [ref=e66]:
+            - img [ref=e67]
+            - link "Bluelytics" [ref=e70] [cursor=pointer]:
+              - /url: /Bluelytics
+            - generic [ref=e71]: /
+            - strong [ref=e72]:
+              - link "bluelytics_api" [ref=e73] [cursor=pointer]:
+                - /url: /Bluelytics/bluelytics_api
+            - generic [ref=e74]: Public
+          - generic [ref=e75]:
+            - list:
+              - listitem [ref=e76]:
+                - link "You must be signed in to change notification settings" [ref=e77] [cursor=pointer]:
+                  - /url: /login?return_to=%2FBluelytics%2Fbluelytics_api
+                  - img [ref=e78]
+                  - text: Notifications
+              - listitem [ref=e80]:
+                - link "Fork 1" [ref=e81] [cursor=pointer]:
+                  - /url: /login?return_to=%2FBluelytics%2Fbluelytics_api
+                  - img [ref=e82]
+                  - text: Fork
+                  - generic "1" [ref=e84]
+              - listitem [ref=e85]:
+                - link "You must be signed in to star a repository" [ref=e87] [cursor=pointer]:
+                  - /url: /login?return_to=%2FBluelytics%2Fbluelytics_api
+                  - img [ref=e88]
+                  - text: Star
+                  - generic "9 users starred this repository" [ref=e90]: "9"
+        - navigation "Repository" [ref=e91]:
+          - list [ref=e92]:
+            - listitem [ref=e93]:
+              - link "Code" [ref=e94] [cursor=pointer]:
+                - /url: /Bluelytics/bluelytics_api
+                - img [ref=e95]
+                - generic [ref=e97]: Code
+            - listitem [ref=e98]:
+              - link "Issues 2" [ref=e99] [cursor=pointer]:
+                - /url: /Bluelytics/bluelytics_api/issues
+                - img [ref=e100]
+                - generic [ref=e103]: Issues
+                - generic "2" [ref=e104]
+            - listitem [ref=e105]:
+              - link "Pull requests" [ref=e106] [cursor=pointer]:
+                - /url: /Bluelytics/bluelytics_api/pulls
+                - img [ref=e107]
+                - generic [ref=e109]: Pull requests
+            - listitem [ref=e110]:
+              - link "Actions" [ref=e111] [cursor=pointer]:
+                - /url: /Bluelytics/bluelytics_api/actions
+                - img [ref=e112]
+                - generic [ref=e114]: Actions
+            - listitem [ref=e115]:
+              - link "Projects" [ref=e116] [cursor=pointer]:
+                - /url: /Bluelytics/bluelytics_api/projects
+                - img [ref=e117]
+                - generic [ref=e119]: Projects
+            - listitem [ref=e120]:
+              - link "Security and quality" [ref=e121] [cursor=pointer]:
+                - /url: /Bluelytics/bluelytics_api/security
+                - img [ref=e122]
+                - generic [ref=e124]: Security and quality
+            - listitem [ref=e125]:
+              - link "Insights" [ref=e126] [cursor=pointer]:
+                - /url: /Bluelytics/bluelytics_api/pulse
+                - img [ref=e127]
+                - generic [ref=e129]: Insights
+      - generic [ref=e137]:
+        - generic [ref=e139]:
+          - generic [ref=e142]:
+            - generic [ref=e143]:
+              - generic [ref=e144]:
+                - heading "Collapse file tree" [level=2] [ref=e145]:
+                  - button "Collapse file tree" [expanded] [ref=e146] [cursor=pointer]:
+                    - img [ref=e147]
+                - heading "Files" [level=2] [ref=e150]
+              - generic [ref=e151]:
+                - button "main branch" [ref=e153] [cursor=pointer]:
+                  - generic [ref=e154]:
+                    - generic [ref=e156]:
+                      - img [ref=e158]
+                      - generic [ref=e161]: main
+                    - generic:
+                      - img
+                - button "Search this repository (forward slash)" [ref=e163] [cursor=pointer]:
+                  - img [ref=e164]
+            - generic [ref=e167]:
+              - img [ref=e169]
+              - combobox "Go to file" [ref=e171]
+            - navigation "File Tree Navigation" [ref=e177]:
+              - tree "Files" [ref=e179]:
+                - treeitem ".gitignore" [level=1] [ref=e180]:
+                  - generic [ref=e182] [cursor=pointer]:
+                    - img [ref=e185]
+                    - generic [ref=e187]: .gitignore
+                - treeitem "Dockerfile" [level=1] [ref=e188]:
+                  - generic [ref=e190] [cursor=pointer]:
+                    - img [ref=e193]
+                    - generic [ref=e195]: Dockerfile
+                - treeitem "currency.go" [level=1] [ref=e196]:
+                  - generic [ref=e198] [cursor=pointer]:
+                    - img [ref=e201]
+                    - generic [ref=e203]: currency.go
+                - treeitem "evolution.go" [level=1] [ref=e204]:
+                  - generic [ref=e206] [cursor=pointer]:
+                    - img [ref=e209]
+                    - generic [ref=e211]: evolution.go
+                - treeitem "go.mod" [level=1] [ref=e212]:
+                  - generic [ref=e214] [cursor=pointer]:
+                    - img [ref=e217]
+                    - generic [ref=e219]: go.mod
+                - treeitem "go.sum" [level=1] [ref=e220]:
+                  - generic [ref=e222] [cursor=pointer]:
+                    - img [ref=e225]
+                    - generic [ref=e227]: go.sum
+                - treeitem "redeploy.sh" [level=1] [ref=e228]:
+                  - generic [ref=e230] [cursor=pointer]:
+                    - img [ref=e233]
+                    - generic [ref=e235]: redeploy.sh
+                - treeitem "server.go" [level=1] [ref=e236]:
+                  - generic [ref=e238] [cursor=pointer]:
+                    - img [ref=e241]
+                    - generic [ref=e243]: server.go
+                - treeitem "v1.go" [level=1] [ref=e244]:
+                  - generic [ref=e246] [cursor=pointer]:
+                    - img [ref=e249]
+                    - generic [ref=e251]: v1.go
+                - treeitem "v2.go" [level=1] [ref=e252]:
+                  - generic [ref=e254] [cursor=pointer]:
+                    - img [ref=e257]
+                    - generic [ref=e259]: v2.go
+          - slider "Draggable pane splitter" [ref=e261]
+        - generic [ref=e264]:
+          - generic [ref=e268]:
+            - generic [ref=e270]:
+              - navigation "Breadcrumbs" [ref=e271]:
+                - heading "Breadcrumbs" [level=2] [ref=e272]
+                - list [ref=e273]:
+                  - listitem [ref=e274]:
+                    - link "bluelytics_api" [ref=e275] [cursor=pointer]:
+                      - /url: /Bluelytics/bluelytics_api/tree/main
+              - generic [ref=e276]:
+                - text: /
+                - heading "v2.go" [level=1] [ref=e277]
+              - button "Copy path" [ref=e278] [cursor=pointer]:
+                - img [ref=e279]
+            - button "More file actions" [ref=e285] [cursor=pointer]:
+              - img [ref=e286]
+          - generic [ref=e288]:
+            - generic [ref=e290]:
+              - heading "Latest commit" [level=2] [ref=e291]
+              - generic [ref=e292]:
+                - generic [ref=e294]:
+                  - link "sicarul" [ref=e295] [cursor=pointer]:
+                    - /url: /sicarul
+                    - img "sicarul" [ref=e296]
+                  - link "commits by sicarul" [ref=e297] [cursor=pointer]:
+                    - /url: /Bluelytics/bluelytics_api/commits?author=sicarul
+                    - text: sicarul
+                - link "Query reversed order" [ref=e301] [cursor=pointer]:
+                  - /url: /Bluelytics/bluelytics_api/commit/5f2f0a49703de547e3beda41161b92450572524b
+              - generic [ref=e302]:
+                - generic [ref=e304]:
+                  - link "Commit 5f2f0a4" [ref=e305] [cursor=pointer]:
+                    - /url: /Bluelytics/bluelytics_api/commit/5f2f0a49703de547e3beda41161b92450572524b
+                    - text: 5f2f0a4
+                  - text: ·
+                  - generic "Nov 3, 2023, 10:41 AM GMT-3" [ref=e306]: Nov 3, 20233 years ago
+                - generic [ref=e307]:
+                  - heading "History" [level=2] [ref=e308]
+                  - link "History" [ref=e309] [cursor=pointer]:
+                    - /url: /Bluelytics/bluelytics_api/commits/main/v2.go
+                    - generic [ref=e310]:
+                      - generic:
+                        - img
+                      - generic [ref=e311]: History
+            - generic [ref=e313]:
+              - generic [ref=e315]:
+                - heading "File metadata and controls" [level=2] [ref=e316]
+                - list "File view" [ref=e318]:
+                  - listitem [ref=e319]:
+                    - button "Code" [ref=e320] [cursor=pointer]:
+                      - generic [ref=e322]: Code
+                  - listitem [ref=e323]:
+                    - button "Blame" [ref=e324] [cursor=pointer]:
+                      - generic [ref=e326]: Blame
+                - generic [ref=e327]:
+                  - generic [ref=e328]:
+                    - generic [ref=e329]:
+                      - link "Raw" [ref=e331] [cursor=pointer]:
+                        - /url: https://github.com/Bluelytics/bluelytics_api/raw/refs/heads/main/v2.go
+                        - generic [ref=e333]: Raw
+                      - button "Copy raw file" [ref=e335] [cursor=pointer]:
+                        - img [ref=e336]
+                      - button "Download raw file" [ref=e340] [cursor=pointer]:
+                        - img [ref=e341]
+                    - generic [ref=e344]:
+                      - button "You must be signed in to make or propose changes" [disabled] [ref=e346]:
+                        - img [ref=e347]
+                      - button "More edit options" [ref=e350] [cursor=pointer]:
+                        - img [ref=e351]
+                  - button "Open symbols panel" [ref=e353] [cursor=pointer]:
+                    - img [ref=e354]
+              - region "v2.go" [ref=e357]:
+                - generic [ref=e361]:
+                  - textbox "file content" [ref=e364]: "package main import ( \"context\" \"fmt\" \"log\" \"net/http\" \"os\" \"time\" \"github.com/jackc/pgx/v4/pgxpool\" \"github.com/labstack/echo/v4\" ) type Number float64 func (n Number) MarshalJSON() ([]byte, error) { return []byte(fmt.Sprintf(\"%.2f\", n)), nil } func dbPool() *pgxpool.Pool { connStr := fmt.Sprintf(\"user=%s dbname=%s pool_min_conns=5 pool_max_conns=15\", os.Getenv(\"PG_USER\"), os.Getenv(\"PG_DB\")) ssl_mode := os.Getenv(\"PG_SSLMODE\") password := os.Getenv(\"PG_PASSWORD\") hostname := os.Getenv(\"PG_HOSTNAME\") if ssl_mode != \"\" { connStr = connStr + fmt.Sprintf(\" sslmode=%s\", ssl_mode) } if password != \"\" { connStr = connStr + fmt.Sprintf(\" password=%s\", password) } if hostname != \"\" { connStr = connStr + fmt.Sprintf(\" host=%s\", hostname) } pgConfig, err := pgxpool.ParseConfig(connStr) if err != nil { log.Fatal(err) } pool, err := pgxpool.ConnectConfig(context.Background(), pgConfig) if err != nil { log.Fatal(err) } return pool } type MonedaValues struct { Value_avg Number `json:\"value_avg\"` Value_sell Number `json:\"value_sell\"` Value_buy Number `json:\"value_buy\"` } type Dolares struct { Oficial MonedaValues `json:\"oficial\"` Blue MonedaValues `json:\"blue\"` Oficial_euro MonedaValues `json:\"oficial_euro\"` Blue_euro MonedaValues `json:\"blue_euro\"` Last_update time.Time `json:\"last_update\"` } func getDolarData(db *pgxpool.Pool) Dolares { var res Dolares rows, err := db.Query(context.Background(), ` select tipo, updated_at, value_buy, value_sell, euro_buy, euro_sell from dolar_latest `) if err != nil { log.Fatal(err) } defer rows.Close() for rows.Next() { var name string var updated_at time.Time var dolar_buy Number var dolar_sell Number var euro_buy Number var euro_sell Number if err := rows.Scan(&name, &updated_at, &dolar_buy, &dolar_sell, &euro_buy, &euro_sell); err != nil { log.Fatal(err) } if name == \"oficial\" { res.Oficial.Value_buy = dolar_buy res.Oficial.Value_sell = dolar_sell res.Oficial.Value_avg = (dolar_sell + dolar_buy) / 2 res.Oficial_euro.Value_buy = euro_buy res.Oficial_euro.Value_sell = euro_sell res.Oficial_euro.Value_avg = (euro_sell + euro_buy) / 2 } else { tz, err := time.LoadLocation(\"America/Buenos_Aires\") if err != nil { log.Fatal(err) } res.Last_update = updated_at.In(tz) res.Blue.Value_buy = dolar_buy res.Blue.Value_sell = dolar_sell res.Blue.Value_avg = (dolar_sell + dolar_buy) / 2 res.Blue_euro.Value_buy = euro_buy res.Blue_euro.Value_sell = euro_sell res.Blue_euro.Value_avg = (euro_sell + euro_buy) / 2 } } return res } func v2_latest(c echo.Context, db *pgxpool.Pool) error { dolar := getDolarData(db) callback := c.QueryParam(\"callback\") if callback != \"\" { return c.JSONP(http.StatusOK, callback, dolar) } else { return c.JSON(http.StatusOK, dolar) } } type Alertas struct { Id uint32 `json:\"alert_id\"` Alert_at time.Time `json:\"alert_at\"` Current MonedaValues `json:\"current\"` Previous MonedaValues `json:\"previous\"` } func getAlertsData(db *pgxpool.Pool) Alertas { var res Alertas rows, err := db.Query(context.Background(), ` with ranked as ( select id, alert_at, value_buy, value_sell, (value_buy+value_sell)/2 as value_avg, lag(value_buy) over (order by alert_at) as last_value_sell, lag(value_sell) over (order by alert_at) as last_value_buy, lag((value_buy+value_sell)/2) over (order by alert_at) as last_value_avg, row_number() over(order by alert_at desc) rnk from alertas_dolar ) select id, alert_at, value_buy, value_sell, value_avg, last_value_sell, last_value_buy, last_value_avg from ranked where rnk = 1 `) if err != nil { log.Fatal(err) } defer rows.Close() for rows.Next() { err := rows.Scan( &res.Id, &res.Alert_at, &res.Current.Value_buy, &res.Current.Value_sell, &res.Current.Value_avg, &res.Previous.Value_buy, &res.Previous.Value_sell, &res.Previous.Value_avg) if err != nil { log.Fatal(err) } } return res } func v2_alerts(c echo.Context, db *pgxpool.Pool) error { alert := getAlertsData(db) return c.JSON(http.StatusOK, alert) } // Dolares historical type DolaresHistorical struct { Oficial MonedaValues `json:\"oficial\"` Blue MonedaValues `json:\"blue\"` } type ErrorJson struct { Error string `json:\"error\"` } func getHistoricalData(day string, db *pgxpool.Pool) (DolaresHistorical, error) { var res DolaresHistorical date, err := time.Parse(\"2006-01-02\", day) if err != nil { return res, fmt.Errorf(\"parsing day parameter: use YYYY-MM-DD\") } if date.Weekday() == time.Saturday { // Use friday's data date = date.AddDate(0, 0, -1) } if date.Weekday() == time.Sunday { // Use friday's data date = date.AddDate(0, 0, -2) } rows, err := db.Query(context.Background(), ` select lower(tipo) as tipo, value_buy, value_sell from dolar_evolution where dttm = $1 `, date) if err != nil { log.Fatal(err) } defer rows.Close() for rows.Next() { var name string var dolar_buy Number var dolar_sell Number if err := rows.Scan(&name, &dolar_buy, &dolar_sell); err != nil { log.Fatal(err) } if name == \"oficial\" { res.Oficial.Value_buy = dolar_buy res.Oficial.Value_sell = dolar_sell res.Oficial.Value_avg = (dolar_sell + dolar_buy) / 2 } else { res.Blue.Value_buy = dolar_buy res.Blue.Value_sell = dolar_sell res.Blue.Value_avg = (dolar_sell + dolar_buy) / 2 } } if res.Blue.Value_sell == 0 { return res, fmt.Errorf(\"day not found\") } return res, nil } func v2_historical(c echo.Context, db *pgxpool.Pool) error { day := c.QueryParam(\"day\") dolarhistorico, err := getHistoricalData(day, db) if err != nil { var errjson ErrorJson errjson.Error = fmt.Sprintf(\"Error: %s\", err.Error()) return c.JSON(http.StatusNotFound, errjson) } return c.JSON(http.StatusOK, dolarhistorico) }"
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic [ref=e365]:
+                          - generic [ref=e366] [cursor=pointer]: "1"
+                          - generic [ref=e367] [cursor=pointer]: "2"
+                          - generic [ref=e368] [cursor=pointer]: "3"
+                          - generic [ref=e369] [cursor=pointer]: "4"
+                          - generic [ref=e370] [cursor=pointer]: "5"
+                          - generic [ref=e371] [cursor=pointer]: "6"
+                          - generic [ref=e372] [cursor=pointer]: "7"
+                          - generic [ref=e373] [cursor=pointer]: "8"
+                          - generic [ref=e374] [cursor=pointer]: "9"
+                          - generic [ref=e375] [cursor=pointer]: "10"
+                          - generic [ref=e376] [cursor=pointer]: "11"
+                          - generic [ref=e377] [cursor=pointer]: "12"
+                          - generic [ref=e378] [cursor=pointer]: "13"
+                          - generic [ref=e379] [cursor=pointer]: "14"
+                          - generic [ref=e380] [cursor=pointer]: "15"
+                          - generic [ref=e381] [cursor=pointer]: "16"
+                          - generic [ref=e382] [cursor=pointer]: "17"
+                          - generic [ref=e383] [cursor=pointer]: "18"
+                          - generic [ref=e384] [cursor=pointer]: "19"
+                          - generic [ref=e385] [cursor=pointer]: "20"
+                          - generic [ref=e386] [cursor=pointer]:
+                            - text: "21"
+                            - button [ref=e387]:
+                              - img [ref=e388]
+                          - generic [ref=e390] [cursor=pointer]: "22"
+                          - generic [ref=e391] [cursor=pointer]: "23"
+                          - generic [ref=e392] [cursor=pointer]: "24"
+                          - generic [ref=e393] [cursor=pointer]: "25"
+                          - generic [ref=e394] [cursor=pointer]: "26"
+                          - generic [ref=e395] [cursor=pointer]: "27"
+                          - generic [ref=e396] [cursor=pointer]: "28"
+                          - generic [ref=e397] [cursor=pointer]: "29"
+                          - generic [ref=e398] [cursor=pointer]: "30"
+                          - generic [ref=e399] [cursor=pointer]: "31"
+                          - generic [ref=e400] [cursor=pointer]: "32"
+                          - generic [ref=e401] [cursor=pointer]: "33"
+                          - generic [ref=e402] [cursor=pointer]: "34"
+                          - generic [ref=e403] [cursor=pointer]: "35"
+                          - generic [ref=e404] [cursor=pointer]: "36"
+                          - generic [ref=e405] [cursor=pointer]: "37"
+                          - generic [ref=e406] [cursor=pointer]: "38"
+                          - generic [ref=e407] [cursor=pointer]: "39"
+                          - generic [ref=e408] [cursor=pointer]: "40"
+                          - generic [ref=e409] [cursor=pointer]: "41"
+                          - generic [ref=e410] [cursor=pointer]: "42"
+                          - generic [ref=e411] [cursor=pointer]: "43"
+                          - generic [ref=e412] [cursor=pointer]: "44"
+                          - generic [ref=e413] [cursor=pointer]: "45"
+                          - generic [ref=e414] [cursor=pointer]: "46"
+                          - generic [ref=e415] [cursor=pointer]: "47"
+                          - generic [ref=e416] [cursor=pointer]: "48"
+                          - generic [ref=e417] [cursor=pointer]: "49"
+                          - generic [ref=e418] [cursor=pointer]:
+                            - text: "50"
+                            - button [ref=e419]:
+                              - img [ref=e420]
+                          - generic [ref=e422] [cursor=pointer]: "51"
+                          - generic [ref=e423] [cursor=pointer]: "52"
+                          - generic [ref=e424] [cursor=pointer]: "53"
+                          - generic [ref=e425] [cursor=pointer]: "54"
+                          - generic [ref=e426] [cursor=pointer]: "55"
+                          - generic [ref=e427] [cursor=pointer]:
+                            - text: "56"
+                            - button [ref=e428]:
+                              - img [ref=e429]
+                          - generic [ref=e431] [cursor=pointer]: "57"
+                          - generic [ref=e432] [cursor=pointer]: "58"
+                          - generic [ref=e433] [cursor=pointer]: "59"
+                          - generic [ref=e434] [cursor=pointer]: "60"
+                          - generic [ref=e435] [cursor=pointer]: "61"
+                          - generic [ref=e436] [cursor=pointer]: "62"
+                          - generic [ref=e437] [cursor=pointer]: "63"
+                          - generic [ref=e438] [cursor=pointer]:
+                            - text: "64"
+                            - button [ref=e439]:
+                              - img [ref=e440]
+                          - generic [ref=e442] [cursor=pointer]: "65"
+                          - generic [ref=e443] [cursor=pointer]: "66"
+                          - generic [ref=e444] [cursor=pointer]: "67"
+                          - generic [ref=e445] [cursor=pointer]: "68"
+                          - generic [ref=e446] [cursor=pointer]: "69"
+                          - generic [ref=e447] [cursor=pointer]: "70"
+                          - generic [ref=e448] [cursor=pointer]: "71"
+                          - generic [ref=e449] [cursor=pointer]: "72"
+                          - generic [ref=e450] [cursor=pointer]: "73"
+                          - generic [ref=e451] [cursor=pointer]: "74"
+                          - generic [ref=e452] [cursor=pointer]: "75"
+                          - generic [ref=e453] [cursor=pointer]: "76"
+                          - generic [ref=e454] [cursor=pointer]: "77"
+                          - generic [ref=e455] [cursor=pointer]: "78"
+                          - generic [ref=e456] [cursor=pointer]: "79"
+                          - generic [ref=e457] [cursor=pointer]: "80"
+                          - generic [ref=e458] [cursor=pointer]: "81"
+                          - generic [ref=e459] [cursor=pointer]: "82"
+                          - generic [ref=e460] [cursor=pointer]: "83"
+                          - generic [ref=e461] [cursor=pointer]: "84"
+                          - generic [ref=e462] [cursor=pointer]: "85"
+                          - generic [ref=e463] [cursor=pointer]: "86"
+                          - generic [ref=e464] [cursor=pointer]: "87"
+                          - generic [ref=e465] [cursor=pointer]: "88"
+                          - generic [ref=e466] [cursor=pointer]: "89"
+                          - generic [ref=e467] [cursor=pointer]: "90"
+                          - generic [ref=e468] [cursor=pointer]: "91"
+                          - generic [ref=e469] [cursor=pointer]: "92"
+                          - generic [ref=e470] [cursor=pointer]: "93"
+                          - generic [ref=e471] [cursor=pointer]: "94"
+                          - generic [ref=e472] [cursor=pointer]: "95"
+                          - generic [ref=e473] [cursor=pointer]: "96"
+                          - generic [ref=e474] [cursor=pointer]: "97"
+                          - generic [ref=e475] [cursor=pointer]: "98"
+                          - generic [ref=e476] [cursor=pointer]: "99"
+                          - generic [ref=e477] [cursor=pointer]: "100"
+                          - generic [ref=e478] [cursor=pointer]: "101"
+                          - generic [ref=e479] [cursor=pointer]: "102"
+                          - generic [ref=e480] [cursor=pointer]: "103"
+                          - generic [ref=e481] [cursor=pointer]: "104"
+                          - generic [ref=e482] [cursor=pointer]: "105"
+                          - generic [ref=e483] [cursor=pointer]: "106"
+                          - generic [ref=e484] [cursor=pointer]: "107"
+                          - generic [ref=e485] [cursor=pointer]: "108"
+                          - generic [ref=e486] [cursor=pointer]: "109"
+                          - generic [ref=e487] [cursor=pointer]: "110"
+                          - generic [ref=e488] [cursor=pointer]: "111"
+                          - generic [ref=e489] [cursor=pointer]:
+                            - text: "112"
+                            - button [ref=e490]:
+                              - img [ref=e491]
+                          - generic [ref=e493] [cursor=pointer]: "113"
+                          - generic [ref=e494] [cursor=pointer]: "114"
+                          - generic [ref=e495] [cursor=pointer]: "115"
+                          - generic [ref=e496] [cursor=pointer]: "116"
+                          - generic [ref=e497] [cursor=pointer]: "117"
+                          - generic [ref=e498] [cursor=pointer]: "118"
+                          - generic [ref=e499] [cursor=pointer]: "119"
+                          - generic [ref=e500] [cursor=pointer]: "120"
+                          - generic [ref=e501] [cursor=pointer]: "121"
+                          - generic [ref=e502] [cursor=pointer]: "122"
+                          - generic [ref=e503] [cursor=pointer]: "123"
+                          - generic [ref=e504] [cursor=pointer]: "124"
+                          - generic [ref=e505] [cursor=pointer]:
+                            - text: "125"
+                            - button [ref=e506]:
+                              - img [ref=e507]
+                          - generic [ref=e509] [cursor=pointer]: "126"
+                          - generic [ref=e510] [cursor=pointer]: "127"
+                          - generic [ref=e511] [cursor=pointer]: "128"
+                          - generic [ref=e512] [cursor=pointer]: "129"
+                          - generic [ref=e513] [cursor=pointer]: "130"
+                          - generic [ref=e514] [cursor=pointer]: "131"
+                          - generic [ref=e515] [cursor=pointer]:
+                            - text: "132"
+                            - button [ref=e516]:
+                              - img [ref=e517]
+                          - generic [ref=e519] [cursor=pointer]: "133"
+                          - generic [ref=e520] [cursor=pointer]: "190"
+                          - generic [ref=e521] [cursor=pointer]: "191"
+                          - generic [ref=e522] [cursor=pointer]: "192"
+                          - generic [ref=e523] [cursor=pointer]: "193"
+                          - generic [ref=e524] [cursor=pointer]:
+                            - text: "194"
+                            - button [ref=e525]:
+                              - img [ref=e526]
+                          - generic [ref=e528] [cursor=pointer]: "195"
+                          - generic [ref=e529] [cursor=pointer]: "196"
+                          - generic [ref=e530] [cursor=pointer]: "197"
+                          - generic [ref=e531] [cursor=pointer]: "198"
+                          - generic [ref=e532] [cursor=pointer]: "199"
+                          - generic [ref=e533] [cursor=pointer]: "200"
+                          - generic [ref=e534] [cursor=pointer]: "201"
+                          - generic [ref=e535] [cursor=pointer]: "202"
+                          - generic [ref=e536] [cursor=pointer]: "203"
+                          - generic [ref=e537] [cursor=pointer]: "204"
+                          - generic [ref=e538] [cursor=pointer]: "205"
+                          - generic [ref=e539] [cursor=pointer]: "206"
+                          - generic [ref=e540] [cursor=pointer]: "207"
+                          - generic [ref=e541] [cursor=pointer]: "208"
+                          - generic [ref=e542] [cursor=pointer]: "209"
+                          - generic [ref=e543] [cursor=pointer]: "210"
+                          - generic [ref=e544] [cursor=pointer]: "211"
+                          - generic [ref=e545] [cursor=pointer]: "212"
+                          - generic [ref=e546] [cursor=pointer]: "213"
+                          - generic [ref=e547] [cursor=pointer]: "214"
+                          - generic [ref=e548] [cursor=pointer]: "215"
+                          - generic [ref=e549] [cursor=pointer]: "216"
+                          - generic [ref=e550] [cursor=pointer]: "217"
+                          - generic [ref=e551] [cursor=pointer]: "218"
+                          - generic [ref=e552] [cursor=pointer]: "219"
+                          - generic [ref=e553] [cursor=pointer]: "220"
+                          - generic [ref=e554] [cursor=pointer]: "221"
+                          - generic [ref=e555] [cursor=pointer]: "222"
+                          - generic [ref=e556] [cursor=pointer]: "223"
+                          - generic [ref=e557] [cursor=pointer]: "224"
+                          - generic [ref=e558] [cursor=pointer]: "225"
+                          - generic [ref=e559] [cursor=pointer]: "226"
+                          - generic [ref=e560] [cursor=pointer]: "227"
+                          - generic [ref=e561] [cursor=pointer]: "228"
+                          - generic [ref=e562] [cursor=pointer]: "229"
+                          - generic [ref=e563] [cursor=pointer]: "230"
+                          - generic [ref=e564] [cursor=pointer]: "231"
+                          - generic [ref=e565] [cursor=pointer]: "232"
+                          - generic [ref=e566] [cursor=pointer]: "233"
+                          - generic [ref=e567] [cursor=pointer]: "234"
+                          - generic [ref=e568] [cursor=pointer]: "235"
+                          - generic [ref=e569] [cursor=pointer]: "236"
+                          - generic [ref=e570] [cursor=pointer]: "237"
+                          - generic [ref=e571] [cursor=pointer]: "238"
+                          - generic [ref=e572] [cursor=pointer]: "239"
+                          - generic [ref=e573] [cursor=pointer]: "240"
+                          - generic [ref=e574] [cursor=pointer]: "241"
+                          - generic [ref=e575] [cursor=pointer]: "242"
+                          - generic [ref=e576] [cursor=pointer]: "243"
+                          - generic [ref=e577] [cursor=pointer]: "244"
+                          - generic [ref=e578] [cursor=pointer]: "245"
+                          - generic [ref=e579] [cursor=pointer]: "246"
+                          - generic [ref=e580] [cursor=pointer]: "247"
+                          - generic [ref=e581] [cursor=pointer]: "248"
+                          - generic [ref=e582] [cursor=pointer]: "249"
+                          - generic [ref=e583] [cursor=pointer]: "250"
+                          - generic [ref=e584] [cursor=pointer]: "251"
+                          - generic [ref=e585] [cursor=pointer]:
+                            - text: "252"
+                            - button [ref=e586]:
+                              - img [ref=e587]
+                          - generic [ref=e589] [cursor=pointer]: "253"
+                          - generic [ref=e590] [cursor=pointer]: "254"
+                          - generic [ref=e591] [cursor=pointer]: "255"
+                          - generic [ref=e592] [cursor=pointer]: "256"
+                          - generic [ref=e593] [cursor=pointer]: "257"
+                          - generic [ref=e594] [cursor=pointer]: "258"
+                          - generic [ref=e595] [cursor=pointer]: "259"
+                          - generic [ref=e596] [cursor=pointer]: "260"
+                          - generic [ref=e597] [cursor=pointer]: "261"
+                          - generic [ref=e598] [cursor=pointer]: "262"
+                          - generic [ref=e599] [cursor=pointer]: "263"
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: package
+                                - text: main
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: import
+                                - text: (
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: "\"context\""
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: "\"fmt\""
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: "\"log\""
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: "\"net/http\""
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: "\"os\""
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: "\"time\""
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: "\"github.com/jackc/pgx/v4/pgxpool\""
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: "\"github.com/labstack/echo/v4\""
+                          - generic:
+                            - generic:
+                              - generic: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: type
+                                - generic: Number
+                                - generic: float64
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: func
+                                - text: (
+                                - generic: "n"
+                                - generic: Number
+                                - text: )
+                                - generic: MarshalJSON
+                                - text: () ([]
+                                - generic: byte
+                                - text: ","
+                                - generic: error
+                                - text: ") {"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: return
+                                - text: "[]"
+                                - generic: byte
+                                - text: (
+                                - generic: fmt
+                                - text: .
+                                - generic: Sprintf
+                                - text: (
+                                - generic: "\"%.2f\""
+                                - text: ","
+                                - generic: "n"
+                                - text: )),
+                                - generic: nil
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: func
+                                - generic: dbPool
+                                - text: ()
+                                - generic: "*"
+                                - text: pgxpool.
+                                - generic: Pool
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: connStr
+                                - generic: :=
+                                - generic: fmt
+                                - text: .
+                                - generic: Sprintf
+                                - text: (
+                                - generic: "\"user=%s dbname=%s pool_min_conns=5 pool_max_conns=15\""
+                                - text: ","
+                                - generic: os
+                                - text: .
+                                - generic: Getenv
+                                - text: (
+                                - generic: "\"PG_USER\""
+                                - text: ),
+                                - generic: os
+                                - text: .
+                                - generic: Getenv
+                                - text: (
+                                - generic: "\"PG_DB\""
+                                - text: ))
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: ssl_mode
+                                - generic: :=
+                                - generic: os
+                                - text: .
+                                - generic: Getenv
+                                - text: (
+                                - generic: "\"PG_SSLMODE\""
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: password
+                                - generic: :=
+                                - generic: os
+                                - text: .
+                                - generic: Getenv
+                                - text: (
+                                - generic: "\"PG_PASSWORD\""
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: hostname
+                                - generic: :=
+                                - generic: os
+                                - text: .
+                                - generic: Getenv
+                                - text: (
+                                - generic: "\"PG_HOSTNAME\""
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: ssl_mode
+                                - generic: "!="
+                                - generic: "\"\""
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: connStr
+                                - generic: =
+                                - generic: connStr
+                                - generic: +
+                                - generic: fmt
+                                - text: .
+                                - generic: Sprintf
+                                - text: (
+                                - generic: "\" sslmode=%s\""
+                                - text: ","
+                                - generic: ssl_mode
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: password
+                                - generic: "!="
+                                - generic: "\"\""
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: connStr
+                                - generic: =
+                                - generic: connStr
+                                - generic: +
+                                - generic: fmt
+                                - text: .
+                                - generic: Sprintf
+                                - text: (
+                                - generic: "\" password=%s\""
+                                - text: ","
+                                - generic: password
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: hostname
+                                - generic: "!="
+                                - generic: "\"\""
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: connStr
+                                - generic: =
+                                - generic: connStr
+                                - generic: +
+                                - generic: fmt
+                                - text: .
+                                - generic: Sprintf
+                                - text: (
+                                - generic: "\" host=%s\""
+                                - text: ","
+                                - generic: hostname
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: pgConfig
+                                - text: ","
+                                - generic: err
+                                - generic: :=
+                                - generic: pgxpool
+                                - text: .
+                                - generic: ParseConfig
+                                - text: (
+                                - generic: connStr
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: err
+                                - generic: "!="
+                                - generic: nil
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: log
+                                - text: .
+                                - generic: Fatal
+                                - text: (
+                                - generic: err
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: pool
+                                - text: ","
+                                - generic: err
+                                - generic: :=
+                                - generic: pgxpool
+                                - text: .
+                                - generic: ConnectConfig
+                                - text: (
+                                - generic: context
+                                - text: .
+                                - generic: Background
+                                - text: (),
+                                - generic: pgConfig
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: err
+                                - generic: "!="
+                                - generic: nil
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: log
+                                - text: .
+                                - generic: Fatal
+                                - text: (
+                                - generic: err
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: return
+                                - generic: pool
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: type
+                                - generic: MonedaValues
+                                - generic: struct
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Value_avg
+                                - generic: Number
+                                - generic: "`json:\"value_avg\"`"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Value_sell
+                                - generic: Number
+                                - generic: "`json:\"value_sell\"`"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Value_buy
+                                - generic: Number
+                                - generic: "`json:\"value_buy\"`"
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: type
+                                - generic: Dolares
+                                - generic: struct
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Oficial
+                                - generic: MonedaValues
+                                - generic: "`json:\"oficial\"`"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Blue
+                                - generic: MonedaValues
+                                - generic: "`json:\"blue\"`"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Oficial_euro
+                                - generic: MonedaValues
+                                - generic: "`json:\"oficial_euro\"`"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Blue_euro
+                                - generic: MonedaValues
+                                - generic: "`json:\"blue_euro\"`"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Last_update
+                                - text: time.
+                                - generic: Time
+                                - generic: "`json:\"last_update\"`"
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: func
+                                - generic: getDolarData
+                                - text: (
+                                - generic: db
+                                - generic: "*"
+                                - text: pgxpool.
+                                - generic: Pool
+                                - text: )
+                                - generic: Dolares
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: var
+                                - generic: res
+                                - generic: Dolares
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: rows
+                                - text: ","
+                                - generic: err
+                                - generic: :=
+                                - generic: db
+                                - text: .
+                                - generic: Query
+                                - text: (
+                                - generic: context
+                                - text: .
+                                - generic: Background
+                                - text: (),
+                                - generic: "`"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: select tipo, updated_at, value_buy, value_sell, euro_buy, euro_sell
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: from dolar_latest
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: "`"
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: err
+                                - generic: "!="
+                                - generic: nil
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: log
+                                - text: .
+                                - generic: Fatal
+                                - text: (
+                                - generic: err
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: defer
+                                - generic: rows
+                                - text: .
+                                - generic: Close
+                                - text: ()
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: for
+                                - generic: rows
+                                - text: .
+                                - generic: Next
+                                - text: "() {"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: var
+                                - generic: name
+                                - generic: string
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: var
+                                - generic: updated_at
+                                - text: time.
+                                - generic: Time
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: var
+                                - generic: dolar_buy
+                                - generic: Number
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: var
+                                - generic: dolar_sell
+                                - generic: Number
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: var
+                                - generic: euro_buy
+                                - generic: Number
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: var
+                                - generic: euro_sell
+                                - generic: Number
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: err
+                                - generic: :=
+                                - generic: rows
+                                - text: .
+                                - generic: Scan
+                                - text: (
+                                - generic: "&"
+                                - generic: name
+                                - text: ","
+                                - generic: "&"
+                                - generic: updated_at
+                                - text: ","
+                                - generic: "&"
+                                - generic: dolar_buy
+                                - text: ","
+                                - generic: "&"
+                                - generic: dolar_sell
+                                - text: ","
+                                - generic: "&"
+                                - generic: euro_buy
+                                - text: ","
+                                - generic: "&"
+                                - generic: euro_sell
+                                - text: );
+                                - generic: err
+                                - generic: "!="
+                                - generic: nil
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: log
+                                - text: .
+                                - generic: Fatal
+                                - text: (
+                                - generic: err
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: name
+                                - generic: ==
+                                - generic: "\"oficial\""
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Oficial
+                                - text: .
+                                - generic: Value_buy
+                                - generic: =
+                                - generic: dolar_buy
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Oficial
+                                - text: .
+                                - generic: Value_sell
+                                - generic: =
+                                - generic: dolar_sell
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Oficial
+                                - text: .
+                                - generic: Value_avg
+                                - generic: =
+                                - text: (
+                                - generic: dolar_sell
+                                - generic: +
+                                - generic: dolar_buy
+                                - text: )
+                                - generic: /
+                                - generic: "2"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Oficial_euro
+                                - text: .
+                                - generic: Value_buy
+                                - generic: =
+                                - generic: euro_buy
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Oficial_euro
+                                - text: .
+                                - generic: Value_sell
+                                - generic: =
+                                - generic: euro_sell
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Oficial_euro
+                                - text: .
+                                - generic: Value_avg
+                                - generic: =
+                                - text: (
+                                - generic: euro_sell
+                                - generic: +
+                                - generic: euro_buy
+                                - text: )
+                                - generic: /
+                                - generic: "2"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - text: "}"
+                                - generic: else
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: tz
+                                - text: ","
+                                - generic: err
+                                - generic: :=
+                                - generic: time
+                                - text: .
+                                - generic: LoadLocation
+                                - text: (
+                                - generic: "\"America/Buenos_Aires\""
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: err
+                                - generic: "!="
+                                - generic: nil
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: log
+                                - text: .
+                                - generic: Fatal
+                                - text: (
+                                - generic: err
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Last_update
+                                - generic: =
+                                - generic: updated_at
+                                - text: .
+                                - generic: In
+                                - text: (
+                                - generic: tz
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Blue
+                                - text: .
+                                - generic: Value_buy
+                                - generic: =
+                                - generic: dolar_buy
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Blue
+                                - text: .
+                                - generic: Value_sell
+                                - generic: =
+                                - generic: dolar_sell
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Blue
+                                - text: .
+                                - generic: Value_avg
+                                - generic: =
+                                - text: (
+                                - generic: dolar_sell
+                                - generic: +
+                                - generic: dolar_buy
+                                - text: )
+                                - generic: /
+                                - generic: "2"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Blue_euro
+                                - text: .
+                                - generic: Value_buy
+                                - generic: =
+                                - generic: euro_buy
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Blue_euro
+                                - text: .
+                                - generic: Value_sell
+                                - generic: =
+                                - generic: euro_sell
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Blue_euro
+                                - text: .
+                                - generic: Value_avg
+                                - generic: =
+                                - text: (
+                                - generic: euro_sell
+                                - generic: +
+                                - generic: euro_buy
+                                - text: )
+                                - generic: /
+                                - generic: "2"
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: return
+                                - generic: res
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: func
+                                - generic: v2_latest
+                                - text: (
+                                - generic: c
+                                - text: echo.
+                                - generic: Context
+                                - text: ","
+                                - generic: db
+                                - generic: "*"
+                                - text: pgxpool.
+                                - generic: Pool
+                                - text: )
+                                - generic: error
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: dolar
+                                - generic: :=
+                                - generic: getDolarData
+                                - text: (
+                                - generic: db
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: callback
+                                - generic: :=
+                                - generic: c
+                                - text: .
+                                - generic: QueryParam
+                                - text: (
+                                - generic: "\"callback\""
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: callback
+                                - generic: "!="
+                                - generic: "\"\""
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: return
+                                - generic: c
+                                - text: .
+                                - generic: JSONP
+                                - text: (
+                                - generic: http
+                                - text: .
+                                - generic: StatusOK
+                                - text: ","
+                                - generic: callback
+                                - text: ","
+                                - generic: dolar
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - text: "}"
+                                - generic: else
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: return
+                                - generic: c
+                                - text: .
+                                - generic: JSON
+                                - text: (
+                                - generic: http
+                                - text: .
+                                - generic: StatusOK
+                                - text: ","
+                                - generic: dolar
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: type
+                                - generic: Alertas
+                                - generic: struct
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Id
+                                - generic: uint32
+                                - generic: "`json:\"alert_id\"`"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Alert_at
+                                - text: time.
+                                - generic: Time
+                                - generic: "`json:\"alert_at\"`"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Current
+                                - generic: MonedaValues
+                                - generic: "`json:\"current\"`"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Previous
+                                - generic: MonedaValues
+                                - generic: "`json:\"previous\"`"
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: func
+                                - generic: getAlertsData
+                                - text: (
+                                - generic: db
+                                - generic: "*"
+                                - text: pgxpool.
+                                - generic: Pool
+                                - text: )
+                                - generic: Alertas
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: var
+                                - generic: res
+                                - generic: Alertas
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: type
+                                - generic: ErrorJson
+                                - generic: struct
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Error
+                                - generic: string
+                                - generic: "`json:\"error\"`"
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: func
+                                - generic: getHistoricalData
+                                - text: (
+                                - generic: day
+                                - generic: string
+                                - text: ","
+                                - generic: db
+                                - generic: "*"
+                                - text: pgxpool.
+                                - generic: Pool
+                                - text: ) (
+                                - generic: DolaresHistorical
+                                - text: ","
+                                - generic: error
+                                - text: ") {"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: var
+                                - generic: res
+                                - generic: DolaresHistorical
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: date
+                                - text: ","
+                                - generic: err
+                                - generic: :=
+                                - generic: time
+                                - text: .
+                                - generic: Parse
+                                - text: (
+                                - generic: "\"2006-01-02\""
+                                - text: ","
+                                - generic: day
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: err
+                                - generic: "!="
+                                - generic: nil
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: return
+                                - generic: res
+                                - text: ","
+                                - generic: fmt
+                                - text: .
+                                - generic: Errorf
+                                - text: (
+                                - generic: "\"parsing day parameter: use YYYY-MM-DD\""
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: date
+                                - text: .
+                                - generic: Weekday
+                                - text: ()
+                                - generic: ==
+                                - generic: time
+                                - text: .
+                                - generic: Saturday
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: // Use friday's data
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: date
+                                - generic: =
+                                - generic: date
+                                - text: .
+                                - generic: AddDate
+                                - text: (
+                                - generic: "0"
+                                - text: ","
+                                - generic: "0"
+                                - text: ","
+                                - generic: "-"
+                                - generic: "1"
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: date
+                                - text: .
+                                - generic: Weekday
+                                - text: ()
+                                - generic: ==
+                                - generic: time
+                                - text: .
+                                - generic: Sunday
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: // Use friday's data
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: date
+                                - generic: =
+                                - generic: date
+                                - text: .
+                                - generic: AddDate
+                                - text: (
+                                - generic: "0"
+                                - text: ","
+                                - generic: "0"
+                                - text: ","
+                                - generic: "-"
+                                - generic: "2"
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: rows
+                                - text: ","
+                                - generic: err
+                                - generic: :=
+                                - generic: db
+                                - text: .
+                                - generic: Query
+                                - text: (
+                                - generic: context
+                                - text: .
+                                - generic: Background
+                                - text: (),
+                                - generic: "`"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: select
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: lower(tipo) as tipo, value_buy, value_sell
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: from
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: dolar_evolution
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: where dttm = $1
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: "`"
+                                - text: ","
+                                - generic: date
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: err
+                                - generic: "!="
+                                - generic: nil
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: log
+                                - text: .
+                                - generic: Fatal
+                                - text: (
+                                - generic: err
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: defer
+                                - generic: rows
+                                - text: .
+                                - generic: Close
+                                - text: ()
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: for
+                                - generic: rows
+                                - text: .
+                                - generic: Next
+                                - text: "() {"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: var
+                                - generic: name
+                                - generic: string
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: var
+                                - generic: dolar_buy
+                                - generic: Number
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: var
+                                - generic: dolar_sell
+                                - generic: Number
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: err
+                                - generic: :=
+                                - generic: rows
+                                - text: .
+                                - generic: Scan
+                                - text: (
+                                - generic: "&"
+                                - generic: name
+                                - text: ","
+                                - generic: "&"
+                                - generic: dolar_buy
+                                - text: ","
+                                - generic: "&"
+                                - generic: dolar_sell
+                                - text: );
+                                - generic: err
+                                - generic: "!="
+                                - generic: nil
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: log
+                                - text: .
+                                - generic: Fatal
+                                - text: (
+                                - generic: err
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: name
+                                - generic: ==
+                                - generic: "\"oficial\""
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Oficial
+                                - text: .
+                                - generic: Value_buy
+                                - generic: =
+                                - generic: dolar_buy
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Oficial
+                                - text: .
+                                - generic: Value_sell
+                                - generic: =
+                                - generic: dolar_sell
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Oficial
+                                - text: .
+                                - generic: Value_avg
+                                - generic: =
+                                - text: (
+                                - generic: dolar_sell
+                                - generic: +
+                                - generic: dolar_buy
+                                - text: )
+                                - generic: /
+                                - generic: "2"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - text: "}"
+                                - generic: else
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Blue
+                                - text: .
+                                - generic: Value_buy
+                                - generic: =
+                                - generic: dolar_buy
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Blue
+                                - text: .
+                                - generic: Value_sell
+                                - generic: =
+                                - generic: dolar_sell
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: res
+                                - text: .
+                                - generic: Blue
+                                - text: .
+                                - generic: Value_avg
+                                - generic: =
+                                - text: (
+                                - generic: dolar_sell
+                                - generic: +
+                                - generic: dolar_buy
+                                - text: )
+                                - generic: /
+                                - generic: "2"
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: res
+                                - text: .
+                                - generic: Blue
+                                - text: .
+                                - generic: Value_sell
+                                - generic: ==
+                                - generic: "0"
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: return
+                                - generic: res
+                                - text: ","
+                                - generic: fmt
+                                - text: .
+                                - generic: Errorf
+                                - text: (
+                                - generic: "\"day not found\""
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: return
+                                - generic: res
+                                - text: ","
+                                - generic: nil
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: func
+                                - generic: v2_historical
+                                - text: (
+                                - generic: c
+                                - text: echo.
+                                - generic: Context
+                                - text: ","
+                                - generic: db
+                                - generic: "*"
+                                - text: pgxpool.
+                                - generic: Pool
+                                - text: )
+                                - generic: error
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: day
+                                - generic: :=
+                                - generic: c
+                                - text: .
+                                - generic: QueryParam
+                                - text: (
+                                - generic: "\"day\""
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: dolarhistorico
+                                - text: ","
+                                - generic: err
+                                - generic: :=
+                                - generic: getHistoricalData
+                                - text: (
+                                - generic: day
+                                - text: ","
+                                - generic: db
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: if
+                                - generic: err
+                                - generic: "!="
+                                - generic: nil
+                                - text: "{"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: var
+                                - generic: errjson
+                                - generic: ErrorJson
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: errjson
+                                - text: .
+                                - generic: Error
+                                - generic: =
+                                - generic: fmt
+                                - text: .
+                                - generic: Sprintf
+                                - text: (
+                                - generic: "\"Error: %s\""
+                                - text: ","
+                                - generic: err
+                                - text: .
+                                - generic: Error
+                                - text: ())
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: return
+                                - generic: c
+                                - text: .
+                                - generic: JSON
+                                - text: (
+                                - generic: http
+                                - text: .
+                                - generic: StatusNotFound
+                                - text: ","
+                                - generic: errjson
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: return
+                                - generic: c
+                                - text: .
+                                - generic: JSON
+                                - text: (
+                                - generic: http
+                                - text: .
+                                - generic: StatusOK
+                                - text: ","
+                                - generic: dolarhistorico
+                                - text: )
+                          - generic:
+                            - generic:
+                              - generic: "}"
+  - alert [ref=e605]
