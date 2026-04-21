@@ -216,9 +216,16 @@ export function FuelMap({ data, selectedStation, focusPoint, className, style }:
     validData.forEach((station) => {
       try {
         const productInfo = getProductInfo(station.producto || '');
-        const color = productInfo.color;
+        const noPrecio = station.precio == null || station.precio === 0;
+        const stale = noPrecio || isStale(station);
+        // Para estaciones sin precio usar color de bandera, no de producto
+        const BRAND_COLORS: Record<string,string> = {
+          'YPF': '#1d4ed8', 'AXION': '#7c3aed', 'GULF': '#ea580c',
+          'PUMA': '#16a34a', 'SHELL': '#dc2626', 'BP': '#15803d',
+        };
+        const brandColor = station.bandera ? BRAND_COLORS[(station.bandera as string).toUpperCase()] : undefined;
+        const color = noPrecio && brandColor ? brandColor : productInfo.color;
         const price = formatCurrency(station.precio);
-        const stale = isStale(station);
         const icon = L.divIcon({
           className: 'custom-marker',
           html: stale
