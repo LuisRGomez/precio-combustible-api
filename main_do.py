@@ -805,6 +805,40 @@ def precios_smart(request: Request,
     if df.empty:
         return {"ubicacion_resuelta": location, "total": 0, "estaciones": []}
     df = filtrar_por_horario(df)
+
+    # ── Complementar con estaciones del catálogo sin precio (post-horario) ───
+    if rlat is not None and rlon is not None:
+        import math as _m
+        _deg_lat = radio_km / 111.0
+        _deg_lon = radio_km / (111.0 * _m.cos(_m.radians(rlat)))
+        catalog = db.get_catalog_stations(
+            lat_min=rlat - _deg_lat, lat_max=rlat + _deg_lat,
+            lon_min=rlon - _deg_lon, lon_max=rlon + _deg_lon,
+            provincia=rprov, limit=500)
+        if catalog:
+            df_cat = pd.DataFrame(catalog)
+            for col in ["latitud", "longitud"]:
+                df_cat[col] = pd.to_numeric(df_cat[col], errors="coerce")
+            df_cat["distancia_km"] = df_cat.apply(
+                lambda x: haversine(rlat, rlon, x.get("latitud"), x.get("longitud")), axis=1)
+            df_cat = df_cat[df_cat["distancia_km"] <= radio_km].copy()
+            df_cat["distancia_km"] = df_cat["distancia_km"].round(2)
+            df_cat["precio"] = None
+            df_cat["producto"] = None
+            df_cat["precio_vigente"] = False
+            # Solo agregar estaciones NO cubiertas por precios (match empresa+dirección)
+            if not df.empty and "empresa" in df.columns and "direccion" in df.columns:
+                known = set(zip(
+                    df["empresa"].str.upper().str.strip().fillna(""),
+                    df["direccion"].str.upper().str.strip().fillna("")
+                ))
+                mask = df_cat.apply(
+                    lambda r: (str(r.get("empresa") or "").upper().strip(),
+                               str(r.get("direccion") or "").upper().strip()) not in known,
+                    axis=1)
+                df_cat = df_cat[mask]
+            if not df_cat.empty:
+                df = pd.concat([df, df_cat], ignore_index=True).sort_values("distancia_km")
     if "precio" in df.columns and "distancia_km" not in df.columns:
         df = df.sort_values("precio")
     cols = [c for c in COLS + ["distancia_km", "precio_vigente"] if c in df.columns]

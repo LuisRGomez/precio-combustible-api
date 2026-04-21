@@ -498,3 +498,33 @@ def localidad_mas_cercana(lat: float, lon: float, provincia: str = None) -> Opti
             best = {"localidad": row['localidad'], "provincia": row['provincia'],
                     "lat": row['lat'], "lon": row['lon'], "distancia_km": round(d, 1)}
     return best
+
+
+def get_catalog_stations(lat_min: float, lat_max: float,
+                          lon_min: float, lon_max: float,
+                          provincia: str = None,
+                          limit: int = 500) -> list:
+    """
+    Devuelve estaciones del catálogo (ypf/gulf/axion/puma) en el bounding box.
+    Sin precio — para mostrar en el mapa como marcadores sin precio.
+    """
+    conn = _conn()
+    q = """
+        SELECT id, fuente, empresa, bandera, cuit,
+               direccion, localidad, provincia,
+               lat AS latitud, lon AS longitud,
+               estado, codigo_postal
+        FROM stations
+        WHERE lat BETWEEN ? AND ?
+          AND lon BETWEEN ? AND ?
+          AND LOWER(COALESCE(estado,'')) NOT IN ('inactiva','closed','cerrada','0')
+    """
+    params = [lat_min, lat_max, lon_min, lon_max]
+    if provincia:
+        q += " AND UPPER(provincia) = ?"
+        params.append(provincia.upper())
+    q += " LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(q, params).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
