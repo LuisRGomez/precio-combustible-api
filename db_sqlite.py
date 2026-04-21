@@ -171,7 +171,9 @@ def get_estaciones(provincia: Optional[str] = None,
                    localidad: Optional[str] = None,
                    producto: Optional[str] = None,
                    limit: int = 5000,
-                   solo_recientes: bool = False) -> list:
+                   solo_recientes: bool = False,
+                   lat_min=None, lat_max=None,
+                   lon_min=None, lon_max=None) -> list:
     """
     Lee estaciones del cache con filtros opcionales.
     solo_recientes=True → solo registros con fecha_vigencia de las últimas 72h
@@ -198,6 +200,12 @@ def get_estaciones(provincia: Optional[str] = None,
     if producto:
         q += " AND LOWER(producto) LIKE ?"
         params.append(f"%{producto.lower()}%")
+    if lat_min is not None and lat_max is not None:
+        q += " AND latitud BETWEEN ? AND ?"
+        params.extend([lat_min, lat_max])
+    if lon_min is not None and lon_max is not None:
+        q += " AND longitud BETWEEN ? AND ?"
+        params.extend([lon_min, lon_max])
     q += " LIMIT ?"
     params.append(limit)
     rows = conn.execute(q, params).fetchall()

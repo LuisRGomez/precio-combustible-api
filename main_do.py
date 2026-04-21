@@ -320,11 +320,21 @@ def get_cf_headers(request: Request) -> Optional[dict]:
     }
 
 
-def _df_from_sqlite(provincia, localidad, producto, limit):
-    """Lee estaciones desde el cache SQLite (fallback cuando CKAN no responde)."""
+def _df_from_sqlite(provincia, localidad, producto, limit,
+                    lat=None, lon=None, radio_km=None):
+    """Lee estaciones desde el cache SQLite. Con lat/lon aplica bounding box."""
+    import math as _m
+    lat_min = lat_max = lon_min = lon_max = None
+    if lat is not None and lon is not None and radio_km and not localidad:
+        deg_lat = radio_km / 111.0
+        deg_lon = radio_km / (111.0 * _m.cos(_m.radians(lat)))
+        lat_min, lat_max = lat - deg_lat, lat + deg_lat
+        lon_min, lon_max = lon - deg_lon, lon + deg_lon
     records = db.get_estaciones(provincia=provincia, localidad=localidad,
                                 producto=producto, limit=limit,
-                                solo_recientes=True)
+                                solo_recientes=False,
+                                lat_min=lat_min, lat_max=lat_max,
+                                lon_min=lon_min, lon_max=lon_max)
     if not records:
         return pd.DataFrame()
     df = pd.DataFrame(records)
@@ -342,17 +352,17 @@ def _df_from_sqlite(provincia, localidad, producto, limit):
     return df
 
 
-def obtener_datos(provincia, localidad, limit):
+def obtener_datos(provincia, localidad, limit, lat=None, lon=None, radio_km=None):
     # ── SQLite-first: si hay cache local (>0 estaciones), usarlo directamente ─
     # CKAN se actualiza 1x/día via cron — no tiene sentido hacer el usuario esperar 8s
     has_cache = db.estaciones_count() > 0
     if has_cache:
-        df = _df_from_sqlite(provincia, localidad, None, limit)
+        df = _df_from_sqlite(provincia, localidad, None, limit, lat=lat, lon=lon, radio_km=radio_km)
         if not df.empty:
             return df
-        # Sin datos para localidad específica → intentar solo provincia
+        # Sin datos para localidad específica → intentar con bbox
         if localidad:
-            df = _df_from_sqlite(provincia, None, None, limit)
+            df = _df_from_sqlite(provincia, None, None, limit, lat=lat, lon=lon, radio_km=radio_km)
             if not df.empty:
                 return df
         # Sin datos para la provincia → devolver vacío (no bloquear con CKAN)
@@ -732,15 +742,31 @@ def precios_smart(request: Request,
                 if producto:
                     df_loc = df_loc[df_loc["producto"].str.upper() == producto.upper()]
                 df = _radio(df_loc, rlat, rlon, radio_km)
-        if len(df) < 5:
-            df_p = obtener_datos(rprov, None, limit)
+        # Con GPS siempre buscar por bbox para capturar todas las localidades del radio
+        if rlat is not None and rlon is not None:
+            df_p = obtener_datos(rprov, None, limit, lat=rlat, lon=rlon, radio_km=radio_km)
             if not df_p.empty:
                 if producto:
                     df_p = df_p[df_p["producto"].str.upper() == producto.upper()]
                 df_r = _radio(df_p, rlat, rlon, radio_km)
                 if not df_r.empty:
                     dedup = [c for c in ["empresa","direccion","producto"] if c in df_r.columns]
-                    df = pd.concat([df, df_r]).drop_duplicates(subset=dedup).sort_values("distancia_km")
+                    if df.empty:
+                        df = df_r
+                    else:
+                        df = pd.concat([df, df_r]).drop_duplicates(subset=dedup).sort_values("distancia_km")
+        else:
+            # Sin GPS: fallback por cantidad de estaciones
+            _n = df.drop_duplicates(subset=['empresa','direccion']).shape[0] if not df.empty else 0
+            if _n < 5:
+                df_p = obtener_datos(rprov, None, limit)
+                if not df_p.empty:
+                    if producto:
+                        df_p = df_p[df_p["producto"].str.upper() == producto.upper()]
+                    df_r = _radio(df_p, rlat, rlon, radio_km)
+                    if not df_r.empty:
+                        dedup = [c for c in ["empresa","direccion","producto"] if c in df_r.columns]
+                        df = pd.concat([df, df_r]).drop_duplicates(subset=dedup).sort_values("distancia_km")
         if df.empty:
             for pa in ADY.get(rprov, []):
                 df_a = obtener_datos(pa, None, limit)
